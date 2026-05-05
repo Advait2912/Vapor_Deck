@@ -29,19 +29,27 @@ Layout hint: {layout_hint}
 
 === STYLE RULES ===
 Theme: {theme}
-NEVER use hardcoded colors — ONLY CSS custom properties:
+NEVER use hardcoded colors OR hardcoded pixel sizes for the overall slide dimensions.
+NEVER set width/height in px on the .slide element — it must fill its container fluidly.
+ONLY CSS custom properties for all colors:
   --bg, --surface, --text, --text-muted, --accent, --accent-glow,
   --code-bg, --border, --font-head, --font-body
 
 === OUTPUT RULES ===
 1. Return ONLY the <section class="slide"> element — no wrapping HTML, no doctype
-2. Content MUST fit within 1280×720px — max 4 body content blocks
-3. Include a scoped <style> block inside the section for layout
-4. For interactive elements (tabs, toggles), include a <script> block
-5. Add class="reveal" and style="--delay: Xs" to animate elements in staggered sequence
-6. Code blocks: use <pre><code class="language-{{lang}}"> with Prism.js class names
-7. Images: only use CSS backgrounds or SVG — no external image URLs
-8. The slide heading MUST match the title exactly: "{title}"
+2. The .slide element MUST use:
+     width: 100%; height: 100%; 
+     min-height: 100vh;
+     box-sizing: border-box;
+   NO fixed pixel dimensions on the root slide element.
+3. All child layout must be responsive — use flexbox or grid with relative/percent/vh/vw units
+4. Font sizes: use clamp() or vw-based units (e.g. clamp(1rem, 2.5vw, 2.5rem)) so text scales with viewport
+5. Include a scoped <style> block inside the section for layout
+6. For interactive elements (tabs, toggles), include a <script> block
+7. Add class="reveal" and style="--delay: Xs" to animate elements in staggered sequence
+8. Code blocks: use <pre><code class="language-{{lang}}"> with Prism.js class names
+9. Images: only use CSS backgrounds or SVG — no external image URLs
+10. The slide heading MUST match the title exactly: "{title}"
 
 === INTENT GUIDANCE ===
 {intent_guidance}

@@ -172,6 +172,17 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
     session.status = "done" if is_done else "generating"
     save_session(session)
 
+    # Save individual HTML file for convenience
+    try:
+        from store.sessions import get_project_dir
+        slide_filename = f"slide_{n:02d}.html"
+        slide_path = get_project_dir() / "slides" / slide_filename
+        with open(slide_path, "w", encoding="utf-8") as f:
+            f.write(req.html)
+        logger.info(f"[{session_id}] slide {n} HTML saved to {slide_path}")
+    except Exception as e:
+        logger.error(f"[{session_id}] failed to save slide {n} HTML file: {e}")
+
     logger.info(
         f"[{session_id}] slide {n} approved. "
         f"{'Done!' if is_done else f'Next: slide {n+1}'}"

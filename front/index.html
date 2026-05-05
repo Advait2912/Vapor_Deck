@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vapor Deck | AI Slide Generator</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div class="logo">
+          VAPOR<span>DECK</span>
+        </div>
+        <div id="project-path-display" style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); margin-left: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; flex: 1;">Loading project...</div>
+        <div class="top-controls">
+          <select id="theme-select" class="btn">
+            <option value="dark-tech">Dark Tech</option>
+            <option value="clean-light">Clean Light</option>
+            <option value="brutalist">Brutalist</option>
+          </select>
+          <select id="model-select" class="btn">
+            <option value="ollama/gemma4:31b-cloud">Gemma 4 31B (Cloud)</option>
+            <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="openai/gpt-4o">GPT-4o</option>
+          </select>
+          <button id="export-btn" class="btn primary">Export PDF</button>
+        </div>
+      </header>
+
+      <aside>
+        <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center;">
+          Outline
+          <button id="confirm-outline-btn" class="btn primary" style="display: none; padding: 2px 8px; font-size: 0.7rem;">Confirm</button>
+        </div>
+        <div id="outline-list" class="outline-list">
+          <!-- Outline items will be injected here -->
+          <div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">
+            No outline generated yet. Submit a topic to begin.
+          </div>
+        </div>
+      </aside>
+
+      <div id="resizer" class="resizer"></div>
+
+      <main>
+        <div id="preview-container">
+          <iframe id="slide-iframe" frameborder="0"></iframe>
+        </div>
+
+        <div id="v-resizer" class="v-resizer"></div>
+        <div class="interaction-bar">
+          <div id="prompt-container" style="flex: 1; display: flex; gap: 12px; align-items: stretch; height: 100%;">
+            <textarea id="prompt-input" placeholder="Enter a topic, paste a doc, or link a transcript..." style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
+            <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
+              <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Generate Deck</button>
+              <button id="new-deck-btn" class="btn" style="flex: 1; padding: 0 16px; font-size: 0.75rem; opacity: 0.6;" title="Discard current session and start fresh">↺ New Deck</button>
+            </div>
+          </div>
+          
+          <div id="slide-controls" style="display: none; width: 100%; gap: 12px; align-items: center;">
+            <button class="btn" id="refine-simplify">Simplify</button>
+            <button class="btn" id="refine-expand">Expand</button>
+            <button class="btn" id="refine-example">Add Example</button>
+            <button class="btn" id="refine-interactive">Make Interactive</button>
+            <div style="flex: 1;"></div>
+            <button class="btn" id="regen-btn">↻ Regen</button>
+            <button class="btn primary" id="approve-btn">Approve Slide →</button>
+          </div>
+        </div>
+      </main>
+
+      <footer>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span id="status-text">IDLE</span>
+          <span id="vision-status" class="badge" style="display: none; margin-left: 10px; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border); padding: 2px 6px; border-radius: 10px; color: var(--text-muted);">VISION: OK</span>
+        </div>
+        <div id="slide-progress">Slide 0 / 0</div>
+        <div id="model-info">VaporDeck 1.0</div>
+      </footer>
+      <!-- Comparison Overlay -->
+      <div id="comparison-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; padding: 40px; gap: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Refining Slide...</h2>
+          <button id="close-comparison" class="btn">Close</button>
+        </div>
+        
+        <div style="flex: 1; display: flex; gap: 20px; min-height: 0;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+            <div style="color: var(--text-muted); font-size: 0.8rem;">BEFORE</div>
+            <iframe id="iframe-before" style="flex: 1; border: 1px solid var(--border); border-radius: 4px; background: #000;"></iframe>
+            <button id="keep-before-btn" class="btn" style="width: 100%; justify-content: center;">← Keep Current</button>
+          </div>
+          
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+            <div style="color: var(--accent); font-size: 0.8rem;">AFTER (REFINED)</div>
+            <iframe id="iframe-after" style="flex: 1; border: 1px solid var(--accent); border-radius: 4px; background: #000; box-shadow: 0 0 30px var(--accent-glow);"></iframe>
+            <button id="use-after-btn" class="btn primary" style="width: 100%; justify-content: center;">Use Refined →</button>
+          </div>
+        </div>
+        
+        <div id="history-strip" style="display: flex; gap: 12px; height: 100px; overflow-x: auto; padding-bottom: 10px;">
+          <!-- Thumbnails of refinement history -->
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
