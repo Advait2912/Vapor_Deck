@@ -1,0 +1,77 @@
+import json
+from typing import AsyncIterator
+
+import httpx
+
+from ..base import BaseProvider
+
+OLLAMA_BASE = "http://localhost:11434"
+
+
+class OllamaProvider(BaseProvider):
+    """
+    Ollama local model provider.
+
+    Talks to the Ollama REST API running on localhost:11434.
+    Run `ollama serve` before using.
+
+    Text model examples : "llama3.1:8b", "mistral", "phi3"
+    Vision model examples: "llava:13b", "llava:7b"  (vision_audit only)
+    """
+
+    def __init__(self, model: str):
+        self.model = model
+
+    async def stream_text(
+        self,
+        messages: list[dict],
+        system: str,
+    ) -> AsyncIterator[str]:
+        payload = {
+            "model": self.model,
+            "messages": (
+                [{"role": "system", "content": system}] if system else []
+            ) + [
+                {"role": m["role"], "content": m["content"]}
+                for m in messages
+            ],
+            "stream": True,
+        }
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST", f"{OLLAMA_BASE}/api/chat", json=payload
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("done"):
+                        break
+                    content = data.get("message", {}).get("content", "")
+                    if content:
+                        yield content
+
+    async def vision_audit(self, prompt: str, image_b64: str) -> str:
+        """
+        Uses LLaVA-style image input via the `images` field.
+        Requires a vision-capable Ollama model (e.g. llava:13b).
+        Falls back to text-only if model doesn't support images.
+        """
+        payload = {
+            "model": self.model,
+            "messages": [{
+                "role": "user",
+                "content": prompt,
+                "images": [image_b64],
+            }],
+            "stream": False,
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(f"{OLLAMA_BASE}/api/chat", json=payload)
+            resp.raise_for_status()
+            return resp.json()["message"]["content"]

@@ -1,0 +1,12 @@
+fastapi==0.110.0
+uvicorn[standard]
+google-genai
+httpx
+pydantic[email]
+python-dotenv
+python-multipart
+pymupdf
+python-docx
+Pillow
+beautifulsoup4
+aiofiles

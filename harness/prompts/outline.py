@@ -1,0 +1,64 @@
+"""
+Outline generation prompt.
+
+Reads from the synthesized deck_context (not raw input directly).
+"""
+
+OUTLINE_SYSTEM = (
+    "You are a presentation architect. "
+    "Return only valid JSON — no markdown fences, no explanation."
+)
+
+OUTLINE_PROMPT = """You are building a slide deck presentation.
+
+=== SYNTHESIZED CONTEXT ===
+Topic: {topic}
+Audience: {audience}
+Tone: {tone}
+Key themes: {key_themes}
+Key facts to include: {key_facts}
+Narrative arc: {narrative_arc}
+
+=== HARD CONSTRAINTS (NON-NEGOTIABLE — every slide MUST respect ALL of these) ===
+{hard_constraints}
+
+=== STYLE ===
+Theme: {theme}
+Layout preference: {layout_preference}
+
+=== TASK ===
+Generate a slide outline as a JSON array.
+Return ONLY the raw JSON array — no text before or after, no markdown code fences.
+
+Each slide object MUST have these exact keys:
+- "index": integer starting at 1
+- "title": string, the slide heading (max 8 words)
+- "intent": one of: title-hero, explain-concept, explain-mechanism, show-example, compare, list-points, code-walkthrough, summary
+- "key_points": array of 3-5 strings — what this slide MUST cover
+- "layout_hint": one of: single-column, two-column, code-left, hero-centered, bullet-list
+
+Rules:
+- Generate 5 to 8 slides total
+- Slide 1 is ALWAYS intent: "title-hero" with layout_hint: "hero-centered"
+- Last slide is ALWAYS intent: "summary" with layout_hint: "bullet-list"
+- No two consecutive slides should have the same intent
+- Each slide covers different content — never repeat a key point
+"""
+
+
+def build_outline_prompt(ctx: dict, theme: str) -> str:
+    style = ctx.get("style_intent", {})
+    constraints = ctx.get("hard_constraints", [])
+    return OUTLINE_PROMPT.format(
+        topic=ctx.get("topic", ""),
+        audience=ctx.get("audience", "general audience"),
+        tone=ctx.get("tone", "professional"),
+        key_themes=", ".join(ctx.get("key_themes", [])) or "none specified",
+        key_facts="\n".join(f"- {f}" for f in ctx.get("key_facts", [])) or "none specified",
+        narrative_arc=ctx.get("narrative_arc", ""),
+        hard_constraints=(
+            "\n".join(f"- {c}" for c in constraints) if constraints else "none"
+        ),
+        theme=theme,
+        layout_preference=style.get("layout_preference", "no preference"),
+    )
