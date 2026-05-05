@@ -20,10 +20,11 @@ def stream_llm_response(
         try:
             async for token in generator:
                 if token:
-                    # Escape newlines inside token so SSE framing isn't broken
                     safe = token.replace("\n", "\\n")
                     yield f"data: {safe}\n\n"
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             yield f"data: [ERROR] {str(e)}\n\n"
         finally:
             yield "data: [DONE]\n\n"
@@ -33,6 +34,6 @@ def stream_llm_response(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # prevents nginx from buffering SSE
+            "X-Accel-Buffering": "no",
         },
     )

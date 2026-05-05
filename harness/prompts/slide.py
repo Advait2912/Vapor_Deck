@@ -39,7 +39,7 @@ NEVER use hardcoded colors — ONLY CSS custom properties:
 3. Include a scoped <style> block inside the section for layout
 4. For interactive elements (tabs, toggles), include a <script> block
 5. Add class="reveal" and style="--delay: Xs" to animate elements in staggered sequence
-6. Code blocks: use <pre><code class="language-{lang}"> with Prism.js class names
+6. Code blocks: use <pre><code class="language-{{lang}}"> with Prism.js class names
 7. Images: only use CSS backgrounds or SVG — no external image URLs
 8. The slide heading MUST match the title exactly: "{title}"
 
