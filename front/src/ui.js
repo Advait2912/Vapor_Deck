@@ -12,6 +12,7 @@ export const elements = {
   themeSelect: document.getElementById('theme-select'),
   modelSelect: document.getElementById('model-select'),
   approveBtn: document.getElementById('approve-btn'),
+  customRegenBtn: document.getElementById('custom-regen-btn'),
   stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),
   generateBtn: document.getElementById('generate-btn'),
@@ -106,6 +107,10 @@ export function updateUI() {
   if (elements.stopBtn) {
     const inActiveSession = !!state.sessionId && ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
     elements.stopBtn.disabled = !inActiveSession;
+  }
+  if (elements.customRegenBtn) {
+    const hasDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
+    elements.customRegenBtn.disabled = !hasDraft;
   }
 
   // Show slide controls when in generation/reviewing phase

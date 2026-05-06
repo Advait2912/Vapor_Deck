@@ -13,6 +13,7 @@ export function setupEventListeners(actions) {
     onConfirmOutline, 
     onApproveSlide, 
     onRefine,
+    onCustomRegenerate,
     onRegenerate,
     onStopGeneration,
     onUseRefined,
@@ -100,6 +101,11 @@ export function setupEventListeners(actions) {
   if (elements.regenBtn) {
     elements.regenBtn.addEventListener('click', () => {
       onRegenerate?.();
+    });
+  }
+  if (elements.customRegenBtn) {
+    elements.customRegenBtn.addEventListener('click', () => {
+      onCustomRegenerate?.();
     });
   }
 

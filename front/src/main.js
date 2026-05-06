@@ -23,7 +23,81 @@ let pendingRefineImages = [];
 let lastRefinedHtml = '';
 const activeSlideControllers = new Map();
 let activeRefineController = null;
-let sessionRunToken = 0;
+let sessionRunToken = 0; // increment only for hard resets/stops
+const latestJobBySlide = {};
+let slideJobCounter = 0;
+const SESSION_VIEW_PREFIX = 'vapordeck:view:';
+
+function beginSlideJob(index) {
+  const id = ++slideJobCounter;
+  latestJobBySlide[index] = id;
+  return id;
+}
+
+function isLatestSlideJob(index, id) {
+  return latestJobBySlide[index] === id;
+}
+
+function getSessionViewKey(sessionId) {
+  return `${SESSION_VIEW_PREFIX}${sessionId}`;
+}
+
+function loadSessionViewState(sessionId) {
+  if (!sessionId) return null;
+  try {
+    const raw = localStorage.getItem(getSessionViewKey(sessionId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionViewState() {
+  if (!state.sessionId) return;
+  const payload = {
+    draftSlides: state.draftSlides || {},
+    latestSlides: state.latestSlides || {},
+    promptApplyingIndices: Object.keys(state.promptApplyingSlides || {}).map(Number),
+    generatingIndices: Object.keys(state.generatingSlides || {}).map(Number),
+    currentIndex: state.currentIndex || 0,
+    currentSlideHtml: state.currentSlideHtml || ''
+  };
+  try {
+    localStorage.setItem(getSessionViewKey(state.sessionId), JSON.stringify(payload));
+  } catch {
+    // ignore quota/storage errors
+  }
+}
+
+function clearSessionViewState(sessionId) {
+  if (!sessionId) return;
+  try {
+    localStorage.removeItem(getSessionViewKey(sessionId));
+  } catch {
+    // ignore
+  }
+}
+
+function resumeGeneratingSlidesFromCache() {
+  const indices = Object.keys(state.generatingSlides || {}).map(Number);
+  if (!indices.length) return;
+  indices.forEach((idx) => {
+    startSlideGeneration(idx, true);
+  });
+}
+
+function syncStatusFromState() {
+  const hasActiveJobs = Object.keys(state.generatingSlides || {}).length > 0;
+  const currentSaved = state.slides.some(s => s.index === state.currentIndex);
+  const currentDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
+  if (hasActiveJobs) {
+    state.status = 'GENERATING';
+  } else if (currentSaved || currentDraft) {
+    state.status = 'REVIEWING';
+  } else if (state.outline.length && state.slides.length === state.outline.length) {
+    state.status = 'DONE';
+  }
+}
 
 // ── Initialization ────────────────────────────────────────────────────────────
 async function init() {
@@ -37,6 +111,7 @@ async function init() {
     onConfirmOutline: handleConfirmOutline,
     onApproveSlide: approveSlide,
     onRefine: startRefinement,
+    onCustomRegenerate: customRegenerateWithPrompt,
     onRegenerate: regenerateCurrentSlide,
     onStopGeneration: stopConversation,
     onNewDeck: handleNewDeck,
@@ -66,6 +141,23 @@ async function loadProjectInfo() {
     const session = await getActiveSession();
     if (session && session.session_id) {
       const backendStatus = (session.status || 'idle').toLowerCase();
+      const cached = loadSessionViewState(session.session_id) || {};
+      const approvedFromBackend = (session.slides || [])
+        .filter(s => s.approved)
+        .map(s => ({ index: (s.index || 1) - 1, html: s.html }));
+      const latestSlides = { ...(cached.latestSlides || {}) };
+      const draftSlides = { ...(cached.draftSlides || {}) };
+      const generatingSlides = (cached.generatingIndices || []).reduce((acc, idx) => {
+        acc[idx] = true;
+        return acc;
+      }, {});
+      const promptApplyingSlides = (cached.promptApplyingIndices || []).reduce((acc, idx) => {
+        acc[idx] = true;
+        return acc;
+      }, {});
+      approvedFromBackend.forEach(s => {
+        latestSlides[s.index] = s.html;
+      });
 
       updateState({
         sessionId: session.session_id,
@@ -73,7 +165,8 @@ async function loadProjectInfo() {
         slides: (session.slides || []).map(s => ({ ...s, index: s.index - 1 })),
         // Normalise backend snake_case status to our uppercase convention
         status: backendStatus.toUpperCase(),
-        currentIndex: session.current_index || 0,
+        currentIndex: cached.currentIndex ?? (session.current_index || 0),
+        currentSlideHtml: cached.currentSlideHtml || '',
         theme: session.theme || 'dark-tech',
         model: session.text_model || state.model
       });
@@ -88,17 +181,30 @@ async function loadProjectInfo() {
         renderOutlineContentSummary();
       } else if (s === 'GENERATING') {
         state.phase = 'DESIGN';
-        startAllSlidesGeneration();
-        renderPlaceholder(`Resuming generation in background...`);
+        renderPlaceholder('Resuming previous generation...');
+        resumeGeneratingSlidesFromCache();
       } else if (s === 'REVIEWING') {
         state.phase = 'DESIGN';
-        renderPlaceholder('Slide ready for review. Approve or refine.');
+        const latest = state.latestSlides[state.currentIndex];
+        if (latest) {
+          state.currentSlideHtml = latest;
+          renderSlide(latest);
+        } else {
+          renderPlaceholder('Slide ready for review. Approve or refine.');
+        }
       } else if (s === 'DONE') {
         state.phase = 'DESIGN';
-        renderPlaceholder('Deck complete! Export or start a new deck.');
+        const latest = state.latestSlides[state.currentIndex];
+        if (latest) {
+          state.currentSlideHtml = latest;
+          renderSlide(latest);
+        } else {
+          renderPlaceholder('Deck complete! Export or start a new deck.');
+        }
       } else if (state.outline.length > 0) {
         renderPlaceholder('Project loaded. Ready to continue.');
       }
+      persistSessionViewState();
     }
   } catch (error) {
     console.error('Failed to load project info:', error);
@@ -108,6 +214,7 @@ async function loadProjectInfo() {
 
 // ── New Deck ──────────────────────────────────────────────────────────────────
 function handleNewDeck() {
+  clearSessionViewState(state.sessionId);
   stopAllGeneration();
   pendingTopicImages = [];
   pendingRefineImages = [];
@@ -116,6 +223,8 @@ function handleNewDeck() {
     outline: [],
     slides: [],
     draftSlides: {},
+    latestSlides: {},
+    promptApplyingSlides: {},
     generatingSlides: {},
     currentIndex: 0,
     currentSlideHtml: '',
@@ -225,13 +334,23 @@ function startAllSlidesGeneration() {
  */
 function navigateToSlide(index) {
   state.currentIndex = index;
-  const saved = state.slides.find(s => s.index === index);
-  if (saved) {
-    state.currentSlideHtml = saved.html;
-    state.status = 'REVIEWING';
-    renderSlide(saved.html);
+  if (state.promptApplyingSlides[index]) {
+    state.status = 'GENERATING';
+    renderPlaceholder(`Applying prompt to Slide ${index + 1}...`);
     renderOutline(navigateToSlide);
     updateUI();
+    persistSessionViewState();
+    return;
+  }
+
+  const latest = state.latestSlides[index];
+  if (latest) {
+    state.currentSlideHtml = latest;
+    state.status = 'REVIEWING';
+    renderSlide(latest);
+    renderOutline(navigateToSlide);
+    updateUI();
+    persistSessionViewState();
     return;
   }
 
@@ -242,6 +361,18 @@ function navigateToSlide(index) {
     renderSlide(draft);
     renderOutline(navigateToSlide);
     updateUI();
+    persistSessionViewState();
+    return;
+  }
+
+  const saved = state.slides.find(s => s.index === index);
+  if (saved) {
+    state.currentSlideHtml = saved.html;
+    state.status = 'REVIEWING';
+    renderSlide(saved.html);
+    renderOutline(navigateToSlide);
+    updateUI();
+    persistSessionViewState();
     return;
   }
 
@@ -264,9 +395,12 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
 
   state.status = 'GENERATING';
   state.generatingSlides[index] = true;
+  delete state.promptApplyingSlides[index];
   const runToken = sessionRunToken;
+  const jobId = beginSlideJob(index);
   updateUI();
   renderOutline(navigateToSlide);
+  persistSessionViewState();
 
   const slideNum = index + 1; // backend is 1-indexed
   const slideTitle = state.outline[index]?.title ?? `Slide ${slideNum}`;
@@ -284,17 +418,19 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       slideHtml += token.replace(/\\n/g, '\n'); // unescape backend newlines
     }
 
-    if (runToken !== sessionRunToken) return;
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (!slideHtml.trim()) throw new Error('Empty slide response from backend');
 
     state.draftSlides[index] = slideHtml;
-    if (index === state.currentIndex && runToken === sessionRunToken) {
+    state.latestSlides[index] = slideHtml;
+    if (index === state.currentIndex && runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
       state.currentSlideHtml = slideHtml;
       state.status = 'REVIEWING';
       renderSlide(slideHtml);
     }
     updateUI();
     renderOutline(navigateToSlide);
+    persistSessionViewState();
 
     // Vision status animation
     elements.visionStatus.style.display = 'inline-block';
@@ -305,7 +441,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       elements.visionStatus.style.color = '#10b981';
     }, 1500);
   } catch (error) {
-    if (runToken !== sessionRunToken) {
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) {
       return;
     }
     if (error?.name === 'AbortError') {
@@ -321,10 +457,16 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       }
     }
   } finally {
-    activeSlideControllers.delete(index);
-    delete state.generatingSlides[index];
+    if (isLatestSlideJob(index, jobId)) {
+      activeSlideControllers.delete(index);
+      delete state.generatingSlides[index];
+    }
+    if (runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
+      syncStatusFromState();
+    }
     renderOutline(navigateToSlide);
     updateUI();
+    persistSessionViewState();
   }
 }
 
@@ -343,6 +485,7 @@ async function approveSlide() {
 
     state.slides = state.slides.filter(s => s.index !== approvedIndex);
     state.slides.push({ index: approvedIndex, html });
+    state.latestSlides[approvedIndex] = html;
     delete state.draftSlides[approvedIndex];
 
     if (approvedIndex < state.outline.length - 1) {
@@ -371,6 +514,7 @@ async function approveSlide() {
       renderOutline(navigateToSlide);
       renderPlaceholder('🎉 Deck Complete! All slides approved. Use Export PDF to save.');
     }
+    persistSessionViewState();
 
     approveSlideApi(state.sessionId, slideNum, html).catch((error) => {
       console.error('Approval sync failed:', error);
@@ -435,8 +579,96 @@ function regenerateCurrentSlide() {
   startSlideGeneration(state.currentIndex, true);
 }
 
+async function customRegenerateWithPrompt() {
+  const instruction = elements.refineInstructionInput.value.trim();
+  const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+  if (!currentHtml?.trim()) {
+    renderPlaceholder('Generate this slide first, then apply custom prompt.');
+    return;
+  }
+  if (!instruction) {
+    renderPlaceholder('Type a custom instruction first, then click Apply Prompt.');
+    return;
+  }
+
+  if (activeSlideControllers.has(state.currentIndex)) {
+    activeSlideControllers.get(state.currentIndex).abort();
+  }
+  if (activeRefineController) {
+    activeRefineController.abort();
+  }
+
+  const index = state.currentIndex;
+  const slideNum = index + 1;
+  const runToken = sessionRunToken;
+  const jobId = beginSlideJob(index);
+
+  // If a slide was previously approved, regenerating it creates a new draft
+  // and should require re-approval.
+  state.slides = state.slides.filter(s => s.index !== index);
+
+  state.status = 'GENERATING';
+  state.generatingSlides[index] = true;
+  state.promptApplyingSlides[index] = true;
+  renderOutline(navigateToSlide);
+  updateUI();
+  persistSessionViewState();
+  renderPlaceholder(`Applying prompt to Slide ${slideNum}...`);
+
+  let regenerated = '';
+  activeRefineController = new AbortController();
+  try {
+    const stream = streamSlide(state.sessionId, slideNum, 'refine', {
+      refineMode: 'expand',
+      currentHtml,
+      instruction,
+      signal: activeRefineController.signal
+    });
+
+    for await (const token of stream) {
+      regenerated += token.replace(/\\n/g, '\n');
+    }
+
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    if (!regenerated.trim()) throw new Error('Empty regenerated slide');
+
+    state.draftSlides[index] = regenerated;
+    state.latestSlides[index] = regenerated;
+    delete state.promptApplyingSlides[index];
+    if (state.currentIndex === index) {
+      state.currentSlideHtml = regenerated;
+      state.status = 'REVIEWING';
+      renderSlide(regenerated);
+    }
+  } catch (error) {
+    if (runToken !== sessionRunToken) return;
+    if (!isLatestSlideJob(index, jobId)) return;
+    if (error?.name !== 'AbortError') {
+      console.error('Custom regeneration failed:', error);
+      state.status = 'ERROR';
+      delete state.promptApplyingSlides[index];
+      if (state.currentIndex === index) {
+        renderPlaceholder(`Custom regenerate failed: ${error.message}`);
+      }
+    } else {
+      delete state.promptApplyingSlides[index];
+    }
+  } finally {
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    activeRefineController = null;
+    delete state.generatingSlides[index];
+    syncStatusFromState();
+    renderOutline(navigateToSlide);
+    updateUI();
+    persistSessionViewState();
+  }
+}
+
 function stopAllGeneration() {
   sessionRunToken += 1;
+  Object.keys(latestJobBySlide).forEach((k) => {
+    delete latestJobBySlide[k];
+  });
   for (const controller of activeSlideControllers.values()) {
     controller.abort();
   }
@@ -446,6 +678,7 @@ function stopAllGeneration() {
     activeRefineController = null;
   }
   state.generatingSlides = {};
+  state.promptApplyingSlides = {};
   if (state.status === 'GENERATING' || state.status === 'APPROVING') {
     state.status = state.currentSlideHtml ? 'REVIEWING' : 'IDLE';
   }
