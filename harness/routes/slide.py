@@ -49,10 +49,111 @@ class ApproveSlideRequest(BaseModel):
     html: str
 
 
+class ChangeModeRequest(BaseModel):
+    mode: str # "plan" | "build"
+
+class ChatRequest(BaseModel):
+    message: str
+    current_slide_index: int | None = None
+
 class RefineSlideRequest(BaseModel):
     mode: str  # "simplify" | "expand" | "example" | "interactive"
     current_html: str
     instruction: str | None = None
+
+
+@router.put("/session/{session_id}/mode")
+async def change_mode(session_id: str, req: ChangeModeRequest):
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if req.mode not in ("plan", "build"):
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    
+    session.mode = req.mode
+    save_session(session)
+    return {"status": "ok", "mode": session.mode}
+
+
+@router.post("/session/{session_id}/chat")
+async def session_chat(session_id: str, req: ChatRequest):
+    """
+    Plan Mode Chat: Refine metadata/outline based on conversation.
+    Returns updated metadata for the deck or specific slide.
+    """
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.mode != "plan" and session.status != "reviewing_outline":
+        raise HTTPException(status_code=400, detail="Chat is only available in Plan Mode or during Outline Review")
+
+    model = get_model(session.text_model)
+    
+    # System prompt for Plan Mode refinement
+    PLAN_SYSTEM = """
+    You are the Content Architect for Vapor Deck. 
+    Your goal is to refine the slide outline (metadata) based on the user's request.
+    You MUST ONLY output a JSON object representing the updated outline items.
+    
+    The user is in PLAN MODE. You are NOT generating HTML. You are refining the PLAN.
+    
+    You can update the 'title', 'intent', 'key_points', and 'layout_hint' for any slide.
+    
+    Output format:
+    {
+        "updates": [
+            {
+                "index": 1,
+                "title": "New Title",
+                "intent": "new-intent",
+                "key_points": ["point 1", "point 2"],
+                "layout_hint": "new-layout"
+            }
+        ]
+    }
+    """
+    
+    context = {
+        "topic": session.topic,
+        "outline": [item.model_dump() for item in session.outline],
+        "current_slide_index": req.current_slide_index
+    }
+    
+    prompt = f"Current Outline: {json.dumps(context['outline'])}\n\nUser Message: {req.message}"
+    
+    try:
+        raw_response = await collect_stream(
+            model,
+            [{"role": "user", "content": prompt}],
+            PLAN_SYSTEM
+        )
+        
+        data = json.loads(strip_fences(raw_response))
+        updates = data.get("updates", [])
+        
+        for update in updates:
+            idx = update.get("index")
+            for item in session.outline:
+                if item.index == idx:
+                    if "title" in update: item.title = update["title"]
+                    if "intent" in update: item.intent = update["intent"]
+                    if "key_points" in update: item.key_points = update["key_points"]
+                    if "layout_hint" in update: item.layout_hint = update["layout_hint"]
+        
+        save_session(session)
+        return {
+            "status": "ok", 
+            "outline": [item.model_dump() for item in session.outline],
+            "message": "I've updated the outline according to your request. Please review the changes in the sidebar."
+        }
+        
+    except Exception as e:
+        logger.error(f"Chat failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/session/{session_id}/slide/{n}")

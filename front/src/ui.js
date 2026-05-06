@@ -35,15 +35,15 @@ export const elements = {
   refineInstructionInput: document.getElementById('refine-instruction-input'),
   refineImageInput: document.getElementById('refine-image-input'),
   refineImageThumbs: document.getElementById('refine-image-thumbs'),
-  refineButtons: [
-    document.getElementById('refine-simplify'),
-    document.getElementById('refine-expand'),
-    document.getElementById('refine-example'),
-    document.getElementById('refine-interactive')
-  ],
+  refineButtons: [], // Removed in favor of refined workflow
   newDeckBtn: document.getElementById('new-deck-btn'),
   infoSidebar: document.getElementById('info-sidebar'),
-  infoList: document.getElementById('info-list')
+  infoList: document.getElementById('info-list'),
+  planInteraction: document.getElementById('plan-interaction'),
+  chatHistory: document.getElementById('chat-history'),
+  buildInteraction: document.getElementById('build-interaction'),
+  planModeBtn: document.getElementById('plan-mode-btn'),
+  buildModeBtn: document.getElementById('build-mode-btn')
 };
 
 /**
@@ -71,76 +71,75 @@ export function updateUI() {
     dot.style.boxShadow = '0 0 8px #10b981';
   }
 
-  // ── Generate Button: context-aware label + state ──────────────────────────
-  const btn = elements.generateBtn;
-  const newDeckBtn = elements.newDeckBtn;
+  // ── Mode-aware Layout ──────────────────────────────────────────────────────
+  const isPlan = state.mode === 'plan';
+  elements.planInteraction.style.display = isPlan ? 'flex' : 'none';
+  elements.buildInteraction.style.display = isPlan ? 'none' : 'flex';
 
-  if (status === 'IDLE') {
-    btn.textContent = 'Generate Deck';
-    btn.disabled = false;
-    if (newDeckBtn) newDeckBtn.style.display = 'none';
-  } else if (status === 'REVIEWING_OUTLINE') {
-    btn.textContent = 'Start Generation →';
-    btn.disabled = false; // clickable to trigger confirm
-    elements.confirmOutlineBtn.style.display = 'block';
-    elements.promptInput.disabled = false; // Allow user to edit prompt for reference or re-generation
-  } else if (status === 'SYNTHESIZING' || status === 'OUTLINING' || status === 'INITIALIZING') {
-    btn.textContent = 'Working...';
-    btn.disabled = true;
-    if (newDeckBtn) newDeckBtn.style.display = 'none';
-  } else if (status === 'GENERATING') {
-    btn.textContent = 'Generating Slides...';
-    btn.disabled = true;
-    if (newDeckBtn) newDeckBtn.style.display = 'block';
-  } else if (status === 'REVIEWING') {
-    btn.textContent = 'Approve or Refine Slide';
-    btn.disabled = true;
-    if (newDeckBtn) newDeckBtn.style.display = 'block';
-  } else if (status === 'DONE') {
-    btn.textContent = 'Deck Complete ✓';
-    btn.disabled = true;
-    if (newDeckBtn) newDeckBtn.style.display = 'block';
-  } else if (status === 'ERROR') {
-    btn.textContent = 'Retry';
-    btn.disabled = false;
-  }
+  if (elements.planModeBtn) elements.planModeBtn.classList.toggle('active', isPlan);
+  if (elements.buildModeBtn) elements.buildModeBtn.classList.toggle('active', !isPlan);
 
-  if (newDeckBtn) newDeckBtn.style.display = 'flex';
-
-  if (elements.stopBtn) {
-    const inActiveSession = !!state.sessionId && ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
-    elements.stopBtn.disabled = !inActiveSession;
-  }
-  if (elements.customRegenBtn) {
-    const hasDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
-    elements.customRegenBtn.disabled = !hasDraft;
-  }
-
-  // Show slide controls when in generation/reviewing phase
+  // Status-based visibility
   const inSlidePhase = ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
+  
   if (inSlidePhase) {
-    elements.promptContainer.style.display = 'none';
-    elements.slideControls.style.display = 'flex';
     elements.refinePanel.style.display = 'block';
-    
-    // Auto-render slide info if we have one selected
     if (state.outline.length > 0) {
       renderSlideInfo(state.currentIndex);
     }
   } else {
-    elements.promptContainer.style.display = 'flex';
-    elements.slideControls.style.display = 'none';
     elements.refinePanel.style.display = 'none';
+    if (status === 'IDLE') {
+      elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
+    }
   }
 
-  // Handle Right Sidebar content during Outline Review
-  if (status === 'REVIEWING_OUTLINE') {
-    // If we want to show the full summary by default, but allow slide info override
-    // We can check if the info list is empty or if we want to force it.
-    // For now, let's say: if we are in REVIEWING_OUTLINE, show the summary 
-    // unless renderSlideInfo was just called.
-    // Actually, a better way is to check a flag or just let main.js handle it.
+  // Generate Button label in Plan Mode
+  if (isPlan) {
+    elements.promptInput.disabled = false;
+    if (status === 'IDLE') {
+      elements.generateBtn.textContent = 'Generate Deck';
+      elements.generateBtn.disabled = false;
+    } else if (status === 'REVIEWING_OUTLINE' || status === 'GENERATING' || status === 'DONE' || status === 'REVIEWING') {
+      elements.generateBtn.textContent = 'Send Message';
+      elements.generateBtn.disabled = false;
+    } else if (['SYNTHESIZING', 'OUTLINING'].includes(status)) {
+      elements.generateBtn.textContent = 'Working...';
+      elements.generateBtn.disabled = true;
+      elements.promptInput.disabled = true;
+    }
   }
+
+  // Handle Confirm Outline visibility
+  if (status === 'REVIEWING_OUTLINE') {
+    elements.confirmOutlineBtn.style.display = 'block';
+  } else {
+    elements.confirmOutlineBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Render a chat message in the plan interaction history
+ */
+export function renderChatMessage(role, text) {
+  if (!elements.chatHistory) return;
+  
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-message ${role === 'user' ? 'user-msg' : 'ai-msg'} fade-in`;
+  
+  const roleSpan = document.createElement('div');
+  roleSpan.className = 'msg-role';
+  roleSpan.textContent = role === 'user' ? 'You' : 'VaporDeck';
+  
+  const textDiv = document.createElement('div');
+  textDiv.textContent = text;
+  
+  msgDiv.appendChild(roleSpan);
+  msgDiv.appendChild(textDiv);
+  elements.chatHistory.appendChild(msgDiv);
+  
+  // Scroll to bottom
+  elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
 }
 
 /**
@@ -171,26 +170,47 @@ export function renderOutline(onItemClick = null) {
     const weight    = isActive ? '600' : '400';
     const cursor    = (isApproved || onItemClick) ? 'pointer' : 'default';
 
+    const genBtnHtml = isApproved 
+      ? `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`
+      : isGenerating 
+        ? `<div class="loading-spinner-tiny"></div>`
+        : `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
+
     return `
       <div class="outline-item ${isActive ? 'active' : ''} ${isApproved ? 'approved' : ''}"
            data-index="${index}"
-           style="padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.85rem;
-                  cursor: ${cursor}; display: flex; align-items: center; gap: 10px;
-                  background: ${bgColor}; transition: background 0.15s;">
-        <span style="color: ${numColor}; font-family: var(--font-mono); min-width: 22px; font-size: 0.75rem;">${badge}</span>
-        <div style="flex: 1; color: ${textColor}; font-weight: ${weight};">${item.title}</div>
-        ${isApproved ? '<span style="font-size:0.65rem;color:#10b981;opacity:0.7;">approved</span>' : isGenerating ? '<span style="font-size:0.65rem;color:#fbbf24;opacity:0.85;">generating</span>' : isDraft ? '<span style="font-size:0.65rem;color:#60a5fa;opacity:0.85;">ready</span>' : '<span style="font-size:0.65rem;color:#6b7280;opacity:0.85;">pending</span>'}
+           style="padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); 
+                  font-size: 0.85rem; cursor: ${cursor}; display: flex; align-items: center; gap: 12px;
+                  background: ${bgColor}; transition: all 0.2s ease;">
+        <span style="color: ${numColor}; font-family: var(--font-mono); min-width: 20px; font-size: 0.7rem; opacity: 0.8;">${badge}</span>
+        <div style="flex: 1; color: ${textColor}; font-weight: ${weight}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.01em;">${item.title}</div>
+        <div class="outline-item-actions" style="display: flex; align-items: center; opacity: ${isActive ? '1' : '0.6'}; transition: opacity 0.2s;">
+          ${genBtnHtml}
+        </div>
       </div>
     `;
   }).join('');
 
-  // Always wire up clicks — the handler decides what to do per state
+  // Wire up clicks
   elements.outlineList.querySelectorAll('.outline-item').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      // Don't navigate if clicking the generate button
+      if (e.target.closest('.gen-slide-btn')) return;
+      
       const idx = parseInt(el.dataset.index);
       if (onItemClick) {
         onItemClick(idx);
       }
+    });
+  });
+
+  // Wire up per-slide generation buttons
+  elements.outlineList.querySelectorAll('.gen-slide-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.index);
+      // Trigger a global event or callback
+      window.dispatchEvent(new CustomEvent('generate-slide', { detail: { index: idx } }));
     });
   });
 }
@@ -368,4 +388,49 @@ export function renderImageThumbs(files, target) {
     img.src = URL.createObjectURL(file);
     target.appendChild(img);
   });
+}
+
+/**
+ * Reset all UI elements to their fresh, initial state.
+ */
+export function clearUI() {
+  // 1. Text Inputs
+  elements.promptInput.value = '';
+  elements.refineInstructionInput.value = '';
+  elements.promptInput.disabled = false;
+  
+  // 2. File Inputs & Thumbs
+  if (elements.topicImageInput) elements.topicImageInput.value = '';
+  if (elements.refineImageInput) elements.refineImageInput.value = '';
+  elements.topicImageThumbs.innerHTML = '';
+  elements.refineImageThumbs.innerHTML = '';
+  
+  // 3. Chat & Info
+  if (elements.chatHistory) elements.chatHistory.innerHTML = '';
+  elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
+  
+  // 4. Progress & Status
+  elements.statusText.textContent = 'IDLE';
+  elements.slideProgress.textContent = 'Slide 0 / 0';
+  elements.visionStatus.style.display = 'none';
+  
+  // 5. Sidebar Outline
+  renderOutline(); // This will show the "No outline" placeholder via state.outline check
+  
+  // 6. Preview Iframe
+  renderPlaceholder('Slide Preview Area');
+  
+  // 7. Reset Buttons
+  elements.generateBtn.disabled = false;
+  elements.generateBtn.textContent = 'Generate Deck';
+  elements.confirmOutlineBtn.style.display = 'none';
+  
+  // 8. Selects (Optional: reset to first option)
+  elements.themeSelect.selectedIndex = 0;
+  elements.modelSelect.selectedIndex = 0;
+  
+  // 9. Comparison Overlay
+  elements.comparisonOverlay.style.display = 'none';
+  
+  updateUI();
 }

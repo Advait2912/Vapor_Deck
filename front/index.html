@@ -25,6 +25,12 @@
             <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
             <option value="openai/gpt-4o">GPT-4o</option>
           </select>
+          
+          <div class="mode-toggle">
+            <button id="plan-mode-btn" class="mode-btn active" data-mode="plan">PLAN</button>
+            <button id="build-mode-btn" class="mode-btn" data-mode="build">BUILD</button>
+          </div>
+
           <button id="new-deck-btn" class="btn" title="Discard current session and start fresh">↺ New Deck</button>
           <button id="export-btn" class="btn primary">Export PDF</button>
         </div>
@@ -52,41 +58,38 @@
 
         <div id="v-resizer" class="v-resizer"></div>
         <div class="interaction-bar">
-          <div id="prompt-container" style="flex: 1; display: flex; gap: 12px; align-items: stretch; height: 100%;">
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
-              <textarea id="prompt-input" placeholder="Enter the initial deck topic and context..." style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <label class="btn" for="topic-image-input">Upload Topic/Style Images</label>
-                <input id="topic-image-input" type="file" accept="image/*" multiple style="display:none;" />
-                <div id="topic-image-thumbs" class="thumb-strip"></div>
+          <!-- Plan Mode Interaction: Chat Focus -->
+          <div id="plan-interaction" style="flex: 1; display: flex; flex-direction: column; gap: 12px; height: 100%; overflow: hidden;">
+            <div id="chat-history" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 8px; font-size: 0.85rem;">
+              <!-- Messages will be injected here -->
+            </div>
+            <div style="display: flex; gap: 12px; align-items: stretch;">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                <textarea id="prompt-input" placeholder="Discuss the deck outline and refine slide content..." style="flex: 1; min-height: 60px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
+                <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Send</button>
               </div>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
-              <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Generate Deck</button>
-            </div>
           </div>
-          
-          <div id="slide-controls" style="display: none; width: 100%; gap: 12px; align-items: center;">
-            <button class="btn" id="refine-simplify">Simplify</button>
-            <button class="btn" id="refine-expand">Expand</button>
-            <button class="btn" id="refine-example">Add Example</button>
-            <button class="btn" id="refine-interactive">Make Interactive</button>
-            <button class="btn primary" id="custom-regen-btn">Apply Prompt ↻</button>
-            <div style="flex: 1;"></div>
-            <button class="btn" id="stop-btn">Stop</button>
-            <button class="btn" id="regen-btn">↻ Regen</button>
-            <button class="btn primary" id="approve-btn">Approve Slide →</button>
+
+          <!-- Build Mode Interaction: Refine Focus -->
+          <div id="build-interaction" style="display: none; width: 100%; gap: 12px; align-items: center;">
+            <div id="refine-input-container" style="flex: 1; display: flex; gap: 12px; align-items: center;">
+              <textarea id="refine-instruction-input" placeholder="Refine visual layout, colors, or specific elements..." style="flex: 1; min-height: 40px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 10px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.85rem;"></textarea>
+              <div style="display: flex; gap: 8px;">
+                <label class="btn" for="refine-image-input" style="padding: 6px 10px;" title="Attach assets"><span style="font-size: 1.2rem;">⊕</span></label>
+                <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" id="regen-btn">↻ Regen</button>
+              <button class="btn primary" id="approve-btn">Approve Slide →</button>
+            </div>
           </div>
         </div>
         <div id="refine-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 10px 20px;">
-          <div style="display:flex; gap:12px; align-items:flex-start;">
-            <textarea id="refine-instruction-input" placeholder="Optional refine instructions (e.g. use fewer words, add metric chart, shift visual hierarchy)..." style="flex:1; min-height:72px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 10px; border-radius: 4px; outline: none; resize: vertical; font-family: inherit; font-size: 0.85rem;"></textarea>
-            <div style="display:flex; flex-direction:column; gap:8px; min-width: 240px;">
-              <label class="btn" for="refine-image-input" style="justify-content:center;">Attach Refine Images</label>
-              <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
-              <div id="refine-image-thumbs" class="thumb-strip"></div>
-            </div>
-          </div>
+          <div id="refine-image-thumbs" class="thumb-strip"></div>
         </div>
       </main>
       <div id="r-resizer" class="resizer"></div>

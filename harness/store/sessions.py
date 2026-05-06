@@ -52,9 +52,22 @@ def save_session(session: DeckSession) -> None:
 
 def delete_session(session_id: str) -> None:
     sessions.pop(session_id, None)
+    project_dir = get_project_dir()
+    
+    # 1. Remove main state file
     path = get_session_path()
     if path.exists():
         os.remove(path)
+    
+    # 2. Clear slides directory (metadata and HTML)
+    slides_dir = project_dir / "slides"
+    if slides_dir.exists():
+        import shutil
+        for item in slides_dir.iterdir():
+            if item.is_file():
+                os.remove(item)
+            elif item.is_dir():
+                shutil.rmtree(item)
 
 def list_sessions() -> list[str]:
     """Return all known session IDs (from file + memory)."""

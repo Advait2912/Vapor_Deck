@@ -18,7 +18,9 @@ export function setupEventListeners(actions) {
     onStopGeneration,
     onUseRefined,
     onNewDeck,
-    onStartSlideGeneration
+    onStartSlideGeneration,
+    onSwitchMode,
+    onPlanChat
   } = actions;
 
   elements.themeSelect.addEventListener('change', (e) => {
@@ -36,14 +38,13 @@ export function setupEventListeners(actions) {
     if (status === 'IDLE' || status === 'ERROR') {
       const prompt = elements.promptInput.value.trim();
       if (prompt) onStartGeneration(prompt);
-    } else if (status === 'REVIEWING_OUTLINE') {
-      // Already have an outline, just confirm and start generating
-      onConfirmOutline();
+    } else if (state.mode === 'plan' && (status === 'REVIEWING_OUTLINE' || status === 'GENERATING' || status === 'DONE' || status === 'REVIEWING')) {
+      const msg = elements.promptInput.value.trim();
+      if (msg) onPlanChat(msg);
     }
-    // All other states: button is disabled, do nothing
   });
 
-  // Enter key only triggers generation when IDLE or ERROR
+  // Enter key handling
   elements.promptInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -51,7 +52,18 @@ export function setupEventListeners(actions) {
       if (status === 'IDLE' || status === 'ERROR') {
         const prompt = elements.promptInput.value.trim();
         if (prompt) onStartGeneration(prompt);
+      } else if (state.mode === 'plan') {
+        const msg = elements.promptInput.value.trim();
+        if (msg) onPlanChat(msg);
       }
+    }
+  });
+
+  // Build Mode: Refine Prompt handling
+  elements.refineInstructionInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onRegenerate?.();
     }
   });
 
@@ -76,7 +88,6 @@ export function setupEventListeners(actions) {
     onConfirmOutline();
   });
 
-  // New Deck button — resets session to start fresh
   if (elements.newDeckBtn) {
     elements.newDeckBtn.addEventListener('click', () => {
       if (confirm('Start a new deck? Your current project will be preserved in the folder, but this session will reset.')) {
@@ -85,18 +96,25 @@ export function setupEventListeners(actions) {
     });
   }
 
+  // Mode Toggles
+  if (elements.planModeBtn) {
+    elements.planModeBtn.addEventListener('click', () => onSwitchMode('plan'));
+  }
+  if (elements.buildModeBtn) {
+    elements.buildModeBtn.addEventListener('click', () => onSwitchMode('build'));
+  }
+
+  // Custom Event for per-slide generation
+  window.addEventListener('generate-slide', (e) => {
+    onStartSlideGeneration(e.detail.index);
+  });
+
   elements.approveBtn.addEventListener('click', () => {
     if (state.status.toUpperCase() === 'REVIEWING') {
       onApproveSlide();
     }
   });
 
-  elements.refineButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const mode = btn.id.split('-')[1];
-      onRefine(mode);
-    });
-  });
 
   if (elements.regenBtn) {
     elements.regenBtn.addEventListener('click', () => {

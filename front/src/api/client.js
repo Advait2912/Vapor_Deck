@@ -74,6 +74,26 @@ export async function confirmOutline(sessionId, outline) {
   return response.json();
 }
 
+export async function updateMode(sessionId, mode, signal) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/mode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+    signal
+  });
+  return response.json();
+}
+
+export async function sendPlanChat(sessionId, message, currentSlideIndex, signal) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, current_slide_index: currentSlideIndex }),
+    signal
+  });
+  return response.json();
+}
+
 /**
  * Stream slide generation or refinement as an async generator.
  * @param {string} sessionId
@@ -81,7 +101,7 @@ export async function confirmOutline(sessionId, outline) {
  * @param {'generate'|'refine'} mode
  * @param {object} [extra]  e.g. { refineMode: 'expand', currentHtml: '...' }
  */
-export async function* streamSlide(sessionId, slideIndex, mode = 'generate', extra = {}) {
+export async function* streamSlide(sessionId, slideIndex, mode = 'generate', extra = {}, signal) {
   const isRefine = mode === 'refine';
   const endpoint = isRefine
     ? `${BASE_URL}/session/${sessionId}/slide/${slideIndex}/refine`
@@ -102,7 +122,7 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
       ...(isRefine ? { 'Content-Type': 'application/json' } : {})
     },
     ...(body ? { body } : {}),
-    ...(extra.signal ? { signal: extra.signal } : {})
+    signal
   });
 
   if (!response.ok) {

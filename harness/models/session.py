@@ -29,6 +29,7 @@ class DeckSession(BaseModel):
     # Status lifecycle:
     # idle → synthesizing → synthesized → outlining → reviewing_outline → generating → done
     status: str = "idle"
+    mode: str = "plan"  # plan | build
 
     # Model config
     text_model: str = "google/gemini-2.0-flash"

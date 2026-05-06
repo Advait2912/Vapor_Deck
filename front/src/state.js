@@ -13,6 +13,8 @@ export const state = {
   currentSlideHtml: '',
   status: 'IDLE', // IDLE | OUTLINING | GENERATING | REVIEWING | DONE
   phase: 'CONTENT', // CONTENT | DESIGN
+  mode: 'plan', // plan | build
+  messages: [],
   theme: 'dark-tech',
   model: 'ollama/gemma4:31b-cloud',
   projectPath: '',

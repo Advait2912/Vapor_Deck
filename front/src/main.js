@@ -10,11 +10,13 @@ import {
   approveSlide as approveSlideApi,
   deleteSession,
   getProjectInfo,
-  getActiveSession
+  getActiveSession,
+  updateMode,
+  sendPlanChat
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
-import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide, renderOutlineContentSummary, renderImageThumbs } from './ui.js';
+import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide, renderOutlineContentSummary, renderImageThumbs, renderSlideInfo, renderChatMessage, clearUI } from './ui.js';
 import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
 
@@ -60,7 +62,8 @@ function persistSessionViewState() {
     promptApplyingIndices: Object.keys(state.promptApplyingSlides || {}).map(Number),
     generatingIndices: Object.keys(state.generatingSlides || {}).map(Number),
     currentIndex: state.currentIndex || 0,
-    currentSlideHtml: state.currentSlideHtml || ''
+    currentSlideHtml: state.currentSlideHtml || '',
+    messages: state.messages || []
   };
   try {
     localStorage.setItem(getSessionViewKey(state.sessionId), JSON.stringify(payload));
@@ -90,6 +93,9 @@ function syncStatusFromState() {
   const hasActiveJobs = Object.keys(state.generatingSlides || {}).length > 0;
   const currentSaved = state.slides.some(s => s.index === state.currentIndex);
   const currentDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
+  
+  if (state.status === 'REVIEWING_OUTLINE') return; // Don't auto-sync away from outline review
+
   if (hasActiveJobs) {
     state.status = 'GENERATING';
   } else if (currentSaved || currentDraft) {
@@ -120,7 +126,10 @@ async function init() {
       state.currentSlideHtml = lastRefinedHtml;
       state.draftSlides[state.currentIndex] = lastRefinedHtml;
       renderSlide(lastRefinedHtml);
-    }
+    },
+    onSwitchMode: handleSwitchMode,
+    onPlanChat: handlePlanChat,
+    onStartSlideGeneration: (index) => startSlideGeneration(index, true)
   });
 
   await loadProjectInfo();
@@ -168,8 +177,16 @@ async function loadProjectInfo() {
         currentIndex: cached.currentIndex ?? (session.current_index || 0),
         currentSlideHtml: cached.currentSlideHtml || '',
         theme: session.theme || 'dark-tech',
-        model: session.text_model || state.model
+        model: session.text_model || state.model,
+        mode: session.mode || 'plan',
+        messages: cached.messages || []
       });
+
+      // Restore chat history in UI
+      if (state.messages.length > 0) {
+        elements.chatHistory.innerHTML = '';
+        state.messages.forEach(m => renderChatMessage(m.role, m.text));
+      }
 
       console.log(`Restored session ${state.sessionId} (status: ${state.status})`);
       renderOutline(navigateToSlide);
@@ -212,9 +229,13 @@ async function loadProjectInfo() {
   }
 }
 
+//TODO: fix the new deck shit, it dont work reliably
 // ── New Deck ──────────────────────────────────────────────────────────────────
-function handleNewDeck() {
-  clearSessionViewState(state.sessionId);
+async function handleNewDeck() {
+  const oldSessionId = state.sessionId;
+  
+  // 1. Immediate UI & State reset
+  clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingTopicImages = [];
   pendingRefineImages = [];
@@ -222,6 +243,7 @@ function handleNewDeck() {
     sessionId: null,
     outline: [],
     slides: [],
+    messages: [],
     draftSlides: {},
     latestSlides: {},
     promptApplyingSlides: {},
@@ -230,21 +252,20 @@ function handleNewDeck() {
     currentSlideHtml: '',
     status: 'IDLE',
     phase: 'CONTENT',
-    projectPath: state.projectPath // keep path
+    mode: 'plan',
+    projectPath: state.projectPath 
   });
-  elements.promptInput.value = '';
-  elements.promptInput.disabled = false;
-  elements.generateBtn.disabled = false;
-  elements.generateBtn.textContent = 'Generate Deck';
   
-  elements.refineInstructionInput.value = '';
-  elements.topicImageThumbs.innerHTML = '';
-  elements.refineImageThumbs.innerHTML = '';
-  elements.visionStatus.style.display = 'none';
-  elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
-  renderPlaceholder('Slide Preview Area');
-  renderOutline(navigateToSlide);
-  updateUI();
+  clearUI();
+
+  // 2. Background backend deletion (don't block UI reset)
+  if (oldSessionId) {
+    try {
+      await deleteSession(oldSessionId);
+    } catch (e) {
+      console.warn('Failed to delete session on backend:', e);
+    }
+  }
 }
 
 // ── Outline Generation ────────────────────────────────────────────────────────
@@ -299,15 +320,22 @@ async function handleConfirmOutline() {
 
     await confirmOutline(state.sessionId, state.outline);
 
+    // Transition to BUILD mode automatically after outline is confirmed
+    await handleSwitchMode('build');
+
     state.status = 'GENERATING';
     state.phase = 'DESIGN';
     state.currentIndex = 0;
+    
+    // Add confirmation message to chat
+    const confirmMsg = "Outline confirmed! Transitioning to Build Mode. You can now build and refine individual slides.";
+    state.messages.push({ role: 'ai', text: confirmMsg });
+    renderChatMessage('ai', confirmMsg);
+
     elements.confirmOutlineBtn.style.display = 'none';
     elements.confirmOutlineBtn.disabled = false;
     elements.confirmOutlineBtn.textContent = 'Confirm';
-    updateUI(); // this will flip to slide-controls via updateUI's inSlidePhase logic
-
-    startAllSlidesGeneration();
+    updateUI();
     navigateToSlide(0);
   } catch (error) {
     console.error('Confirmation failed:', error);
@@ -318,11 +346,47 @@ async function handleConfirmOutline() {
   }
 }
 
-function startAllSlidesGeneration() {
-  for (let i = 0; i < state.outline.length; i++) {
-    if (state.slides.some(s => s.index === i)) continue;
-    if (state.draftSlides[i]) continue;
-    startSlideGeneration(i);
+async function handleSwitchMode(newMode) {
+  if (!state.sessionId) return;
+  try {
+    const res = await updateMode(state.sessionId, newMode);
+    updateState({ mode: res.mode });
+    updateUI();
+    persistSessionViewState();
+  } catch (error) {
+    console.error('Mode switch failed:', error);
+  }
+}
+
+async function handlePlanChat(message) {
+  if (!state.sessionId) return;
+  try {
+    // Add user message to state and UI
+    state.messages.push({ role: 'user', text: message });
+    renderChatMessage('user', message);
+    
+    state.status = 'OUTLINING';
+    updateUI();
+    
+    currentAbortController = new AbortController();
+    const res = await sendPlanChat(state.sessionId, message, state.currentIndex + 1, currentAbortController.signal);
+    
+    updateState({ outline: res.outline });
+    state.status = 'REVIEWING_OUTLINE';
+    elements.promptInput.value = '';
+    
+    // Add AI response to state and UI
+    const aiResponse = res.message || "Outline updated based on your request.";
+    state.messages.push({ role: 'ai', text: aiResponse });
+    renderChatMessage('ai', aiResponse);
+
+    renderOutline(navigateToSlide);
+    renderOutlineContentSummary(elements.infoList);
+    updateUI();
+  } catch (error) {
+    console.error('Plan chat failed:', error);
+    state.status = 'ERROR';
+    updateUI();
   }
 }
 
@@ -392,7 +456,9 @@ function navigateToSlide(index) {
     return;
   }
 
-  startSlideGeneration(index);
+  renderPlaceholder(`Slide ${index + 1} has not been built yet. Click the ✦ button in the outline to generate it.`);
+  renderOutline(navigateToSlide);
+  updateUI();
 }
 
 // ── Slide Generation ──────────────────────────────────────────────────────────
@@ -422,7 +488,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   const controller = new AbortController();
   activeSlideControllers.set(index, controller);
   try {
-    const stream = streamSlide(state.sessionId, slideNum, 'generate', { signal: controller.signal });
+    const stream = streamSlide(state.sessionId, slideNum, 'generate', {}, controller.signal);
     for await (const token of stream) {
       slideHtml += token.replace(/\\n/g, '\n'); // unescape backend newlines
     }
@@ -678,6 +744,10 @@ function stopAllGeneration() {
   Object.keys(latestJobBySlide).forEach((k) => {
     delete latestJobBySlide[k];
   });
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
   for (const controller of activeSlideControllers.values()) {
     controller.abort();
   }
