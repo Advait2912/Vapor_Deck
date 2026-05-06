@@ -2,6 +2,7 @@
  * UI Management and Rendering
  */
 import { state } from './state.js';
+import { getSlidePhase, canPlanSlide } from './state.js';
 
 // DOM Elements
 export const elements = {
@@ -35,7 +36,7 @@ export const elements = {
   refineInstructionInput: document.getElementById('refine-instruction-input'),
   refineImageInput: document.getElementById('refine-image-input'),
   refineImageThumbs: document.getElementById('refine-image-thumbs'),
-  refineButtons: [], // Removed in favor of refined workflow
+  refineButtons: [],
   newDeckBtn: document.getElementById('new-deck-btn'),
   infoSidebar: document.getElementById('info-sidebar'),
   infoList: document.getElementById('info-list'),
@@ -71,13 +72,27 @@ export function updateUI() {
     dot.style.boxShadow = '0 0 8px #10b981';
   }
 
-  // ── Mode-aware Layout ──────────────────────────────────────────────────────
+  // ── Per-slide phase awareness ──────────────────────────────────────────────
   const isPlan = state.mode === 'plan';
-  elements.planInteraction.style.display = isPlan ? 'flex' : 'none';
-  elements.buildInteraction.style.display = isPlan ? 'none' : 'flex';
+  const currentSlideInBuild = !canPlanSlide(state.currentIndex);
 
-  if (elements.planModeBtn) elements.planModeBtn.classList.toggle('active', isPlan);
-  if (elements.buildModeBtn) elements.buildModeBtn.classList.toggle('active', !isPlan);
+  // If current slide is in build phase, force build interaction even if toggle says plan
+  const showBuildInteraction = !isPlan || currentSlideInBuild;
+
+  elements.planInteraction.style.display = showBuildInteraction ? 'none' : 'flex';
+  elements.buildInteraction.style.display = showBuildInteraction ? 'flex' : 'none';
+
+  if (elements.planModeBtn) {
+    elements.planModeBtn.classList.toggle('active', isPlan && !currentSlideInBuild);
+    // Dim the plan button if current slide can't be planned
+    elements.planModeBtn.style.opacity = currentSlideInBuild ? '0.4' : '1';
+    elements.planModeBtn.title = currentSlideInBuild
+      ? `Slide ${state.currentIndex + 1} has been built — planning locked`
+      : 'Switch to Plan mode';
+  }
+  if (elements.buildModeBtn) {
+    elements.buildModeBtn.classList.toggle('active', showBuildInteraction);
+  }
 
   // Status-based visibility
   const inSlidePhase = ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
@@ -95,7 +110,7 @@ export function updateUI() {
   }
 
   // Generate Button label in Plan Mode
-  if (isPlan) {
+  if (!showBuildInteraction) {
     elements.promptInput.disabled = false;
     if (status === 'IDLE') {
       elements.generateBtn.textContent = 'Generate Deck';
@@ -138,14 +153,12 @@ export function renderChatMessage(role, text) {
   msgDiv.appendChild(textDiv);
   elements.chatHistory.appendChild(msgDiv);
   
-  // Scroll to bottom
   elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
 }
 
 /**
  * Render the slide outline in the sidebar.
- * Always attaches click handlers — approved slides navigate to their saved HTML,
- * unapproved future slides are navigable only if a callback is provided.
+ * Shows per-slide phase badges: PLAN (purple) or BUILD (blue) with lock icon for built slides.
  */
 export function renderOutline(onItemClick = null) {
   if (!state.outline.length) {
@@ -157,18 +170,26 @@ export function renderOutline(onItemClick = null) {
     const isApproved = state.slides.some(s => s.index === index);
     const isDraft = !!state.draftSlides[index];
     const isGenerating = !!state.generatingSlides[index];
-    const isPast = index < state.currentIndex && !isApproved;
+    const slidePhase = getSlidePhase(index); // 'plan' | 'build'
+    const isBuilt = slidePhase === 'build';
 
     let badge;
-    if (isApproved)      badge = '✓';
+    if (isApproved)       badge = '✓';
     else if (index + 1 < 10) badge = `0${index + 1}`;
-    else                 badge = `${index + 1}`;
+    else                  badge = `${index + 1}`;
 
     const bgColor   = isActive ? 'rgba(59,130,246,0.12)' : 'transparent';
     const textColor = isActive ? 'var(--text-main)' : 'var(--text-muted)';
     const numColor  = isActive ? 'var(--accent)' : isApproved ? '#10b981' : 'var(--text-muted)';
     const weight    = isActive ? '600' : '400';
     const cursor    = (isApproved || onItemClick) ? 'pointer' : 'default';
+
+    // Phase pill: shows current phase of this specific slide
+    const phasePill = isBuilt
+      ? `<span style="font-size: 0.55rem; padding: 1px 5px; border-radius: 3px; background: rgba(59,130,246,0.2); color: #60a5fa; font-weight: 700; letter-spacing: 0.05em; margin-right: 4px;" title="This slide is in Build phase — planning locked">BUILD</span>`
+      : (state.outline.length > 0 && state.status !== 'IDLE' && state.status !== 'REVIEWING_OUTLINE')
+        ? `<span style="font-size: 0.55rem; padding: 1px 5px; border-radius: 3px; background: rgba(139,92,246,0.2); color: #a78bfa; font-weight: 700; letter-spacing: 0.05em; margin-right: 4px;" title="This slide is in Plan phase">PLAN</span>`
+        : '';
 
     const genBtnHtml = isApproved 
       ? `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`
@@ -177,14 +198,18 @@ export function renderOutline(onItemClick = null) {
         : `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
 
     return `
-      <div class="outline-item ${isActive ? 'active' : ''} ${isApproved ? 'approved' : ''}"
+      <div class="outline-item ${isActive ? 'active' : ''} ${isApproved ? 'approved' : ''} ${isBuilt ? 'slide-built' : 'slide-plan'}"
            data-index="${index}"
-           style="padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); 
-                  font-size: 0.85rem; cursor: ${cursor}; display: flex; align-items: center; gap: 12px;
-                  background: ${bgColor}; transition: all 0.2s ease;">
+           style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); 
+                  font-size: 0.85rem; cursor: ${cursor}; display: flex; align-items: center; gap: 10px;
+                  background: ${bgColor}; transition: all 0.2s ease;
+                  border-left: 2px solid ${isBuilt ? 'rgba(59,130,246,0.4)' : 'rgba(139,92,246,0.3)'};">
         <span style="color: ${numColor}; font-family: var(--font-mono); min-width: 20px; font-size: 0.7rem; opacity: 0.8;">${badge}</span>
-        <div style="flex: 1; color: ${textColor}; font-weight: ${weight}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.01em;">${item.title}</div>
-        <div class="outline-item-actions" style="display: flex; align-items: center; opacity: ${isActive ? '1' : '0.6'}; transition: opacity 0.2s;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: ${textColor}; font-weight: ${weight}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.01em;">${item.title}</div>
+          <div style="margin-top: 2px;">${phasePill}</div>
+        </div>
+        <div class="outline-item-actions" style="display: flex; align-items: center; opacity: ${isActive ? '1' : '0.6'}; transition: opacity 0.2s; flex-shrink: 0;">
           ${genBtnHtml}
         </div>
       </div>
@@ -194,13 +219,9 @@ export function renderOutline(onItemClick = null) {
   // Wire up clicks
   elements.outlineList.querySelectorAll('.outline-item').forEach(el => {
     el.addEventListener('click', (e) => {
-      // Don't navigate if clicking the generate button
       if (e.target.closest('.gen-slide-btn')) return;
-      
       const idx = parseInt(el.dataset.index);
-      if (onItemClick) {
-        onItemClick(idx);
-      }
+      if (onItemClick) onItemClick(idx);
     });
   });
 
@@ -209,7 +230,6 @@ export function renderOutline(onItemClick = null) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.index);
-      // Trigger a global event or callback
       window.dispatchEvent(new CustomEvent('generate-slide', { detail: { index: idx } }));
     });
   });
@@ -249,8 +269,6 @@ export function renderPlaceholder(text, targetIframe = elements.slideIframe) {
 
 /**
  * Render slide HTML into an iframe.
- * Injects a scale-to-fit script so fixed-size slides (e.g. 1280×720)
- * always fill the viewport without scrollbars.
  */
 export function renderSlide(html, targetIframe = elements.slideIframe) {
   targetIframe.srcdoc = `
@@ -267,7 +285,6 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
     }
     #slide-scaler {
       transform-origin: top left;
-      /* scale applied by JS below */
     }
   </style>
 </head>
@@ -279,25 +296,20 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
       if (!scaler) return;
       const slide = scaler.firstElementChild;
       if (!slide) return;
-      // Use the slide's natural rendered size (or declared CSS size)
       const naturalW = slide.scrollWidth  || slide.offsetWidth  || 1280;
       const naturalH = slide.scrollHeight || slide.offsetHeight || 720;
       const scaleX = window.innerWidth  / naturalW;
       const scaleY = window.innerHeight / naturalH;
       const scale  = Math.min(scaleX, scaleY);
       scaler.style.transform = 'scale(' + scale + ')';
-      // Centre the scaled content
       const scaledW = naturalW * scale;
       const scaledH = naturalH * scale;
       scaler.style.marginLeft = ((window.innerWidth  - scaledW) / 2) + 'px';
       scaler.style.marginTop  = ((window.innerHeight - scaledH) / 2) + 'px';
     }
-    // Run after layout and on resize
     window.addEventListener('load', fitSlide);
     window.addEventListener('resize', fitSlide);
-    // Also run immediately in case load already fired
     if (document.readyState === 'complete') fitSlide();
-    // Trigger reveal animations
     setTimeout(() => {
       document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
       fitSlide();
@@ -315,9 +327,14 @@ export function renderSlideInfo(index) {
     return;
   }
 
+  const slidePhase = getSlidePhase(index);
+  const phaseLabel = slidePhase === 'build'
+    ? `<span style="color: #60a5fa; font-size: 0.7rem; font-weight: 700;">BUILD PHASE</span>`
+    : `<span style="color: #a78bfa; font-size: 0.7rem; font-weight: 700;">PLAN PHASE</span>`;
+
   elements.infoList.innerHTML = `
     <div class="fade-in">
-      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Slide ${index + 1} Metadata</div>
+      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Slide ${index + 1} · ${phaseLabel}</div>
       <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: #fff;">${item.title}</h3>
       
       <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -337,6 +354,14 @@ export function renderSlideInfo(index) {
             ${(item.key_points || []).map(p => `<li style="margin-bottom: 6px;">${p}</li>`).join('')}
           </ul>
         </div>
+
+        ${slidePhase === 'build' ? `
+        <div style="padding: 10px 12px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.75rem; color: #93c5fd;">
+          ⚙ This slide is in Build phase. Use the refine input or regen to update it.
+        </div>` : `
+        <div style="padding: 10px 12px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 4px; font-size: 0.75rem; color: #c4b5fd;">
+          ✏ This slide is in Plan phase. Chat to refine the outline, or click ✧ to build it.
+        </div>`}
       </div>
     </div>
   `;
@@ -394,42 +419,32 @@ export function renderImageThumbs(files, target) {
  * Reset all UI elements to their fresh, initial state.
  */
 export function clearUI() {
-  // 1. Text Inputs
   elements.promptInput.value = '';
   elements.refineInstructionInput.value = '';
   elements.promptInput.disabled = false;
   
-  // 2. File Inputs & Thumbs
   if (elements.topicImageInput) elements.topicImageInput.value = '';
   if (elements.refineImageInput) elements.refineImageInput.value = '';
   elements.topicImageThumbs.innerHTML = '';
   elements.refineImageThumbs.innerHTML = '';
   
-  // 3. Chat & Info
   if (elements.chatHistory) elements.chatHistory.innerHTML = '';
   elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
   
-  // 4. Progress & Status
   elements.statusText.textContent = 'IDLE';
   elements.slideProgress.textContent = 'Slide 0 / 0';
   elements.visionStatus.style.display = 'none';
   
-  // 5. Sidebar Outline
-  renderOutline(); // This will show the "No outline" placeholder via state.outline check
-  
-  // 6. Preview Iframe
+  renderOutline();
   renderPlaceholder('Slide Preview Area');
   
-  // 7. Reset Buttons
   elements.generateBtn.disabled = false;
   elements.generateBtn.textContent = 'Generate Deck';
   elements.confirmOutlineBtn.style.display = 'none';
   
-  // 8. Selects (Optional: reset to first option)
   elements.themeSelect.selectedIndex = 0;
   elements.modelSelect.selectedIndex = 0;
   
-  // 9. Comparison Overlay
   elements.comparisonOverlay.style.display = 'none';
   
   updateUI();

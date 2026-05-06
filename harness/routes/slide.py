@@ -88,7 +88,7 @@ async def session_chat(session_id: str, req: ChatRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.mode != "plan" and session.status != "reviewing_outline":
+    if session.mode != "plan":
         raise HTTPException(status_code=400, detail="Chat is only available in Plan Mode or during Outline Review")
 
     model = get_model(session.text_model)

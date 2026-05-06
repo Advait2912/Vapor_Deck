@@ -15,7 +15,7 @@ import {
   sendPlanChat
 } from './api/client.js';
 
-import { state, updateState } from './state.js';
+import { state, updateState, getSlidePhase, lockSlideIntoBuild, canPlanSlide, isModeAllowedForSlide } from './state.js';
 import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide, renderOutlineContentSummary, renderImageThumbs, renderSlideInfo, renderChatMessage, clearUI } from './ui.js';
 import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
@@ -25,7 +25,8 @@ let pendingRefineImages = [];
 let lastRefinedHtml = '';
 const activeSlideControllers = new Map();
 let activeRefineController = null;
-let sessionRunToken = 0; // increment only for hard resets/stops
+let currentAbortController = null; // ← was missing, caused ReferenceError
+let sessionRunToken = 0;
 const latestJobBySlide = {};
 let slideJobCounter = 0;
 const SESSION_VIEW_PREFIX = 'vapordeck:view:';
@@ -63,7 +64,8 @@ function persistSessionViewState() {
     generatingIndices: Object.keys(state.generatingSlides || {}).map(Number),
     currentIndex: state.currentIndex || 0,
     currentSlideHtml: state.currentSlideHtml || '',
-    messages: state.messages || []
+    messages: state.messages || [],
+    slidePhases: state.slidePhases || {}
   };
   try {
     localStorage.setItem(getSessionViewKey(state.sessionId), JSON.stringify(payload));
@@ -94,7 +96,7 @@ function syncStatusFromState() {
   const currentSaved = state.slides.some(s => s.index === state.currentIndex);
   const currentDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
   
-  if (state.status === 'REVIEWING_OUTLINE') return; // Don't auto-sync away from outline review
+  if (state.status === 'REVIEWING_OUTLINE') return;
 
   if (hasActiveJobs) {
     state.status = 'GENERATING';
@@ -172,14 +174,14 @@ async function loadProjectInfo() {
         sessionId: session.session_id,
         outline: session.outline || [],
         slides: (session.slides || []).map(s => ({ ...s, index: s.index - 1 })),
-        // Normalise backend snake_case status to our uppercase convention
         status: backendStatus.toUpperCase(),
         currentIndex: cached.currentIndex ?? (session.current_index || 0),
         currentSlideHtml: cached.currentSlideHtml || '',
         theme: session.theme || 'dark-tech',
         model: session.text_model || state.model,
         mode: session.mode || 'plan',
-        messages: cached.messages || []
+        messages: cached.messages || [],
+        slidePhases: cached.slidePhases || {}
       });
 
       // Restore chat history in UI
@@ -229,12 +231,10 @@ async function loadProjectInfo() {
   }
 }
 
-//TODO: fix the new deck shit, it dont work reliably
 // ── New Deck ──────────────────────────────────────────────────────────────────
 async function handleNewDeck() {
   const oldSessionId = state.sessionId;
   
-  // 1. Immediate UI & State reset
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingTopicImages = [];
@@ -248,6 +248,7 @@ async function handleNewDeck() {
     latestSlides: {},
     promptApplyingSlides: {},
     generatingSlides: {},
+    slidePhases: {},
     currentIndex: 0,
     currentSlideHtml: '',
     status: 'IDLE',
@@ -258,7 +259,6 @@ async function handleNewDeck() {
   
   clearUI();
 
-  // 2. Background backend deletion (don't block UI reset)
   if (oldSessionId) {
     try {
       await deleteSession(oldSessionId);
@@ -320,15 +320,12 @@ async function handleConfirmOutline() {
 
     await confirmOutline(state.sessionId, state.outline);
 
-    // Transition to BUILD mode automatically after outline is confirmed
-    await handleSwitchMode('build');
-
+    // Stay in plan mode — user picks when to switch per-slide
     state.status = 'GENERATING';
     state.phase = 'DESIGN';
     state.currentIndex = 0;
     
-    // Add confirmation message to chat
-    const confirmMsg = "Outline confirmed! Transitioning to Build Mode. You can now build and refine individual slides.";
+    const confirmMsg = "Outline confirmed! You can continue planning individual slides or switch to Build mode to generate them. Each slide moves from Plan → Build independently.";
     state.messages.push({ role: 'ai', text: confirmMsg });
     renderChatMessage('ai', confirmMsg);
 
@@ -346,8 +343,16 @@ async function handleConfirmOutline() {
   }
 }
 
+// ── Mode Switch ────────────────────────────────────────────────────────────────
 async function handleSwitchMode(newMode) {
   if (!state.sessionId) return;
+
+  // If switching to plan mode, check if current slide allows it
+  if (newMode === 'plan' && !canPlanSlide(state.currentIndex)) {
+    showSlidePhaseBoundaryMessage(state.currentIndex, 'plan');
+    return;
+  }
+
   try {
     const res = await updateMode(state.sessionId, newMode);
     updateState({ mode: res.mode });
@@ -358,24 +363,56 @@ async function handleSwitchMode(newMode) {
   }
 }
 
+/**
+ * Show a clear message when the user tries to do something that violates
+ * the per-slide plan→build boundary.
+ */
+function showSlidePhaseBoundaryMessage(index, attemptedAction) {
+  const slideNum = index + 1;
+  if (attemptedAction === 'plan') {
+    const msg = `Slide ${slideNum} has already been built. You can't go back to planning a slide that has been generated. Switch to Build mode to refine it instead.`;
+    // Add to chat history so it's visible
+    renderChatMessage('ai', msg);
+    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+  } else if (attemptedAction === 'build-while-chat') {
+    const msg = `Can't generate Slide ${slideNum} while a plan chat is in progress. Wait for the chat to complete first.`;
+    renderChatMessage('ai', msg);
+    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+  }
+}
+
+// ── Plan Chat ─────────────────────────────────────────────────────────────────
 async function handlePlanChat(message) {
   if (!state.sessionId) return;
+
+  // Per-slide boundary check: if this slide has been built, no more planning
+  if (!canPlanSlide(state.currentIndex)) {
+    showSlidePhaseBoundaryMessage(state.currentIndex, 'plan');
+    return;
+  }
+
+  // Can't chat while this slide is actively generating
+  if (state.generatingSlides[state.currentIndex]) {
+    showSlidePhaseBoundaryMessage(state.currentIndex, 'build-while-chat');
+    return;
+  }
+
   try {
-    // Add user message to state and UI
     state.messages.push({ role: 'user', text: message });
     renderChatMessage('user', message);
     
     state.status = 'OUTLINING';
     updateUI();
     
+    if (currentAbortController) currentAbortController.abort();
     currentAbortController = new AbortController();
     const res = await sendPlanChat(state.sessionId, message, state.currentIndex + 1, currentAbortController.signal);
+    currentAbortController = null;
     
     updateState({ outline: res.outline });
     state.status = 'REVIEWING_OUTLINE';
     elements.promptInput.value = '';
     
-    // Add AI response to state and UI
     const aiResponse = res.message || "Outline updated based on your request.";
     state.messages.push({ role: 'ai', text: aiResponse });
     renderChatMessage('ai', aiResponse);
@@ -383,22 +420,27 @@ async function handlePlanChat(message) {
     renderOutline(navigateToSlide);
     renderOutlineContentSummary(elements.infoList);
     updateUI();
+    persistSessionViewState();
   } catch (error) {
+    if (error?.name === 'AbortError') return;
     console.error('Plan chat failed:', error);
-    state.status = 'ERROR';
+    state.status = 'REVIEWING_OUTLINE';
     updateUI();
   }
 }
 
 // ── Outline Navigation ────────────────────────────────────────────────────────
-/**
- * Navigate to a slide by 0-based index.
- * - If approved (in state.slides): show saved HTML immediately.
- * - If it's the current or next to generate: start generation.
- * - If it's a future unapproved slide: ignore (user must approve in order).
- */
 function navigateToSlide(index) {
   state.currentIndex = index;
+
+  // When navigating, auto-switch mode to match the slide's current phase
+  // so the UI always shows the right interaction panel
+  const slidePhase = getSlidePhase(index);
+  if (slidePhase === 'build' && state.mode === 'plan') {
+    // Silently update local mode — don't call backend just for navigation
+    state.mode = 'build';
+    updateMode(state.sessionId, 'build').catch(() => {});
+  }
 
   if (state.status === 'REVIEWING_OUTLINE') {
     renderSlideInfo(index);
@@ -463,9 +505,30 @@ function navigateToSlide(index) {
 
 // ── Slide Generation ──────────────────────────────────────────────────────────
 async function startSlideGeneration(index = state.currentIndex, force = false) {
+  // Per-slide boundary: generation locks this slide into build phase
+  if (!canPlanSlide(index)) {
+    // Already in build — that's fine, just regenerating
+  }
+
+  // Block generation if a plan chat is in progress for ANY slide
+  // (backend can't handle simultaneous chat + generate on same session)
+  if (state.status === 'OUTLINING') {
+    console.warn('Cannot generate while plan chat is in progress');
+    return;
+  }
+
   if (state.generatingSlides[index] && !force) return;
   if (force && activeSlideControllers.has(index)) {
     activeSlideControllers.get(index).abort();
+  }
+
+  // Lock this slide into build phase — irreversible
+  lockSlideIntoBuild(index);
+
+  // If we're currently in plan mode viewing this slide, switch to build
+  if (state.mode === 'plan' && state.currentIndex === index) {
+    state.mode = 'build';
+    updateMode(state.sessionId, 'build').catch(() => {});
   }
 
   state.status = 'GENERATING';
@@ -477,7 +540,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   renderOutline(navigateToSlide);
   persistSessionViewState();
 
-  const slideNum = index + 1; // backend is 1-indexed
+  const slideNum = index + 1;
   const slideTitle = state.outline[index]?.title ?? `Slide ${slideNum}`;
 
   if (index === state.currentIndex) {
@@ -490,7 +553,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   try {
     const stream = streamSlide(state.sessionId, slideNum, 'generate', {}, controller.signal);
     for await (const token of stream) {
-      slideHtml += token.replace(/\\n/g, '\n'); // unescape backend newlines
+      slideHtml += token.replace(/\\n/g, '\n');
     }
 
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
@@ -507,7 +570,6 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     renderOutline(navigateToSlide);
     persistSessionViewState();
 
-    // Vision status animation
     elements.visionStatus.style.display = 'inline-block';
     elements.visionStatus.style.color = 'var(--accent)';
     elements.visionStatus.textContent = 'VISION: ANALYZING...';
@@ -516,9 +578,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       elements.visionStatus.style.color = '#10b981';
     }, 1500);
   } catch (error) {
-    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) {
-      return;
-    }
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (error?.name === 'AbortError') {
       if (index === state.currentIndex) {
         renderPlaceholder(`Stopped generating slide ${slideNum}.`);
@@ -678,8 +738,6 @@ async function customRegenerateWithPrompt() {
   const runToken = sessionRunToken;
   const jobId = beginSlideJob(index);
 
-  // If a slide was previously approved, regenerating it creates a new draft
-  // and should require re-approval.
   state.slides = state.slides.filter(s => s.index !== index);
 
   state.status = 'GENERATING';
