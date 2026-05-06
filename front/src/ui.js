@@ -41,7 +41,9 @@ export const elements = {
     document.getElementById('refine-example'),
     document.getElementById('refine-interactive')
   ],
-  newDeckBtn: document.getElementById('new-deck-btn')
+  newDeckBtn: document.getElementById('new-deck-btn'),
+  infoSidebar: document.getElementById('info-sidebar'),
+  infoList: document.getElementById('info-list')
 };
 
 /**
@@ -81,7 +83,7 @@ export function updateUI() {
     btn.textContent = 'Start Generation →';
     btn.disabled = false; // clickable to trigger confirm
     elements.confirmOutlineBtn.style.display = 'block';
-    if (newDeckBtn) newDeckBtn.style.display = 'block';
+    elements.promptInput.disabled = false; // Allow user to edit prompt for reference or re-generation
   } else if (status === 'SYNTHESIZING' || status === 'OUTLINING' || status === 'INITIALIZING') {
     btn.textContent = 'Working...';
     btn.disabled = true;
@@ -101,8 +103,9 @@ export function updateUI() {
   } else if (status === 'ERROR') {
     btn.textContent = 'Retry';
     btn.disabled = false;
-    if (newDeckBtn) newDeckBtn.style.display = 'block';
   }
+
+  if (newDeckBtn) newDeckBtn.style.display = 'flex';
 
   if (elements.stopBtn) {
     const inActiveSession = !!state.sessionId && ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
@@ -119,10 +122,24 @@ export function updateUI() {
     elements.promptContainer.style.display = 'none';
     elements.slideControls.style.display = 'flex';
     elements.refinePanel.style.display = 'block';
+    
+    // Auto-render slide info if we have one selected
+    if (state.outline.length > 0) {
+      renderSlideInfo(state.currentIndex);
+    }
   } else {
     elements.promptContainer.style.display = 'flex';
     elements.slideControls.style.display = 'none';
     elements.refinePanel.style.display = 'none';
+  }
+
+  // Handle Right Sidebar content during Outline Review
+  if (status === 'REVIEWING_OUTLINE') {
+    // If we want to show the full summary by default, but allow slide info override
+    // We can check if the info list is empty or if we want to force it.
+    // For now, let's say: if we are in REVIEWING_OUTLINE, show the summary 
+    // unless renderSlideInfo was just called.
+    // Actually, a better way is to check a flag or just let main.js handle it.
   }
 }
 
@@ -132,6 +149,10 @@ export function updateUI() {
  * unapproved future slides are navigable only if a callback is provided.
  */
 export function renderOutline(onItemClick = null) {
+  if (!state.outline.length) {
+    elements.outlineList.innerHTML = `<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">No outline generated yet. Submit a topic to begin.</div>`;
+    return;
+  }
   elements.outlineList.innerHTML = state.outline.map((item, index) => {
     const isActive = index === state.currentIndex;
     const isApproved = state.slides.some(s => s.index === index);
@@ -267,28 +288,75 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
   `;
 }
 
-export function renderOutlineContentSummary() {
+export function renderSlideInfo(index) {
+  const item = state.outline[index];
+  if (!item) {
+    elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted);">No slide selected.</div>';
+    return;
+  }
+
+  elements.infoList.innerHTML = `
+    <div class="fade-in">
+      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Slide ${index + 1} Metadata</div>
+      <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: #fff;">${item.title}</h3>
+      
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px;">
+          <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Intent</div>
+          <div style="font-size: 0.85rem; color: #60a5fa; font-weight: 500;">${item.intent}</div>
+        </div>
+
+        <div style="padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px;">
+          <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Layout Hint</div>
+          <div style="font-size: 0.85rem; color: #9ca3af;">${item.layout_hint}</div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Key Points</div>
+          <ul style="margin: 0; padding-left: 18px; color: #d1d5db; font-size: 0.85rem; line-height: 1.6;">
+            ${(item.key_points || []).map(p => `<li style="margin-bottom: 6px;">${p}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function renderOutlineContentSummary(target = null) {
   const rows = state.outline.map((item, idx) => `
-    <div style="padding: 10px 0; border-bottom: 1px solid #222;">
-      <div style="font-weight: 600; color: #fff;">${idx + 1}. ${item.title}</div>
-      <div style="color:#9ca3af; margin-top:4px; font-size: 0.85rem;">Intent: ${item.intent} | Layout: ${item.layout_hint}</div>
-      <ul style="margin: 6px 0 0 18px; color: #d1d5db; font-size: 0.85rem;">
-        ${(item.key_points || []).map(p => `<li>${p}</li>`).join('')}
+    <div style="padding: 12px; border-bottom: 1px solid #222; background: ${idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'}">
+      <div style="font-weight: 600; color: #fff; font-size: 0.9rem;">${idx + 1}. ${item.title}</div>
+      <div style="color:#60a5fa; margin-top:4px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">${item.intent}</div>
+      <ul style="margin: 8px 0 0 16px; padding: 0; color: #9ca3af; font-size: 0.8rem; list-style: circle;">
+        ${(item.key_points || []).map(p => `<li style="margin-bottom: 4px;">${p}</li>`).join('')}
       </ul>
     </div>
   `).join('');
 
-  elements.slideIframe.srcdoc = `
-  <html>
-    <body style="margin:0; background:#090909; color:#e5e7eb; font-family: Inter, Arial, sans-serif;">
-      <div style="max-width: 980px; margin: 0 auto; padding: 28px;">
-        <h2 style="margin:0 0 6px; color:#60a5fa; text-transform:uppercase; letter-spacing:0.08em; font-size:0.8rem;">Phase 1: Content Plan Review</h2>
-        <h1 style="margin:0 0 14px; font-size:1.3rem;">Approve this full content outline before slide design/generation</h1>
-        <div style="padding: 14px; border:1px solid #1f2937; border-radius:8px; background:#111827;">${rows}</div>
+  const html = `
+    <div class="fade-in">
+      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px;">Full Deck Outline</div>
+      <div style="border: 1px solid var(--border); border-radius: 6px; background: #000; overflow: hidden;">
+        ${rows}
       </div>
-    </body>
-  </html>
+    </div>
   `;
+
+  if (target) {
+    target.innerHTML = html;
+  } else {
+    elements.slideIframe.srcdoc = `
+      <html>
+        <body style="margin:0; background:#090909; color:#e5e7eb; font-family: Inter, Arial, sans-serif;">
+          <div style="max-width: 980px; margin: 0 auto; padding: 28px;">
+            <h2 style="margin:0 0 6px; color:#60a5fa; text-transform:uppercase; letter-spacing:0.08em; font-size:0.8rem;">Phase 1: Content Plan Review</h2>
+            <h1 style="margin:0 0 14px; font-size:1.3rem;">Approve this full content outline before slide design/generation</h1>
+            <div style="padding: 14px; border:1px solid #1f2937; border-radius:8px; background:#111827;">${rows}</div>
+          </div>
+        </body>
+      </html>
+    `;
+  }
 }
 
 export function renderImageThumbs(files, target) {

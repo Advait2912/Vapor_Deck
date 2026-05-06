@@ -25,6 +25,7 @@
             <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
             <option value="openai/gpt-4o">GPT-4o</option>
           </select>
+          <button id="new-deck-btn" class="btn" title="Discard current session and start fresh">↺ New Deck</button>
           <button id="export-btn" class="btn primary">Export PDF</button>
         </div>
       </header>
@@ -62,7 +63,6 @@
             </div>
             <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
               <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Generate Deck</button>
-              <button id="new-deck-btn" class="btn" style="flex: 1; padding: 0 16px; font-size: 0.75rem; opacity: 0.6;" title="Discard current session and start fresh">↺ New Deck</button>
             </div>
           </div>
           
@@ -89,6 +89,15 @@
           </div>
         </div>
       </main>
+      <div id="r-resizer" class="resizer"></div>
+      <aside id="info-sidebar" class="info-sidebar">
+        <div class="sidebar-header">Slide Details</div>
+        <div id="info-list" class="info-list">
+          <div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">
+            Select a slide or generate an outline to see details.
+          </div>
+        </div>
+      </aside>
 
       <footer>
         <div class="status-indicator">

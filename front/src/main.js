@@ -178,7 +178,7 @@ async function loadProjectInfo() {
       const s = state.status;
       if (s === 'REVIEWING_OUTLINE') {
         state.phase = 'CONTENT';
-        renderOutlineContentSummary();
+        renderOutlineContentSummary(elements.infoList);
       } else if (s === 'GENERATING') {
         state.phase = 'DESIGN';
         renderPlaceholder('Resuming previous generation...');
@@ -232,17 +232,18 @@ function handleNewDeck() {
     phase: 'CONTENT',
     projectPath: state.projectPath // keep path
   });
-  elements.outlineList.innerHTML = `<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">No outline generated yet. Submit a topic to begin.</div>`;
-  elements.promptContainer.style.display = 'flex';
-  elements.slideControls.style.display = 'none';
-  elements.confirmOutlineBtn.style.display = 'none';
   elements.promptInput.value = '';
+  elements.promptInput.disabled = false;
+  elements.generateBtn.disabled = false;
+  elements.generateBtn.textContent = 'Generate Deck';
+  
   elements.refineInstructionInput.value = '';
   elements.topicImageThumbs.innerHTML = '';
   elements.refineImageThumbs.innerHTML = '';
-  elements.promptInput.disabled = false;
   elements.visionStatus.style.display = 'none';
+  elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
   renderPlaceholder('Slide Preview Area');
+  renderOutline(navigateToSlide);
   updateUI();
 }
 
@@ -277,8 +278,8 @@ async function startGeneration(prompt) {
     state.status = 'REVIEWING_OUTLINE';
     state.phase = 'CONTENT';
     renderOutline(navigateToSlide);
+    renderOutlineContentSummary(elements.infoList);
     updateUI();
-    renderOutlineContentSummary();
   } catch (error) {
     console.error('Generation failed:', error);
     state.status = 'ERROR';
@@ -334,6 +335,14 @@ function startAllSlidesGeneration() {
  */
 function navigateToSlide(index) {
   state.currentIndex = index;
+
+  if (state.status === 'REVIEWING_OUTLINE') {
+    renderSlideInfo(index);
+    renderOutline(navigateToSlide);
+    updateUI();
+    return;
+  }
+
   if (state.promptApplyingSlides[index]) {
     state.status = 'GENERATING';
     renderPlaceholder(`Applying prompt to Slide ${index + 1}...`);
