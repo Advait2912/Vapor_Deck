@@ -7,10 +7,14 @@ import { elements } from './ui.js';
 export function setupEventListeners(actions) {
   const { 
     onStartGeneration, 
+    onTopicImagesSelected,
+    onRefineImagesSelected,
     onExport, 
     onConfirmOutline, 
     onApproveSlide, 
     onRefine,
+    onRegenerate,
+    onStopGeneration,
     onUseRefined,
     onNewDeck,
     onStartSlideGeneration
@@ -54,6 +58,18 @@ export function setupEventListeners(actions) {
     onExport();
   });
 
+  if (elements.topicImageInput) {
+    elements.topicImageInput.addEventListener('change', (e) => {
+      onTopicImagesSelected?.(Array.from(e.target.files || []));
+    });
+  }
+
+  if (elements.refineImageInput) {
+    elements.refineImageInput.addEventListener('change', (e) => {
+      onRefineImagesSelected?.(Array.from(e.target.files || []));
+    });
+  }
+
   // Confirm button in sidebar header
   elements.confirmOutlineBtn.addEventListener('click', () => {
     onConfirmOutline();
@@ -80,6 +96,18 @@ export function setupEventListeners(actions) {
       onRefine(mode);
     });
   });
+
+  if (elements.regenBtn) {
+    elements.regenBtn.addEventListener('click', () => {
+      onRegenerate?.();
+    });
+  }
+
+  if (elements.stopBtn) {
+    elements.stopBtn.addEventListener('click', () => {
+      onStopGeneration?.();
+    });
+  }
 
   elements.closeComparison.addEventListener('click', () => {
     elements.comparisonOverlay.style.display = 'none';

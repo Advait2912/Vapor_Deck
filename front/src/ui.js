@@ -12,6 +12,7 @@ export const elements = {
   themeSelect: document.getElementById('theme-select'),
   modelSelect: document.getElementById('model-select'),
   approveBtn: document.getElementById('approve-btn'),
+  stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),
   generateBtn: document.getElementById('generate-btn'),
   promptInput: document.getElementById('prompt-input'),
@@ -27,6 +28,12 @@ export const elements = {
   exportBtn: document.getElementById('export-btn'),
   visionStatus: document.getElementById('vision-status'),
   projectPathDisplay: document.getElementById('project-path-display'),
+  topicImageInput: document.getElementById('topic-image-input'),
+  topicImageThumbs: document.getElementById('topic-image-thumbs'),
+  refinePanel: document.getElementById('refine-panel'),
+  refineInstructionInput: document.getElementById('refine-instruction-input'),
+  refineImageInput: document.getElementById('refine-image-input'),
+  refineImageThumbs: document.getElementById('refine-image-thumbs'),
   refineButtons: [
     document.getElementById('refine-simplify'),
     document.getElementById('refine-expand'),
@@ -96,11 +103,21 @@ export function updateUI() {
     if (newDeckBtn) newDeckBtn.style.display = 'block';
   }
 
+  if (elements.stopBtn) {
+    const inActiveSession = !!state.sessionId && ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
+    elements.stopBtn.disabled = !inActiveSession;
+  }
+
   // Show slide controls when in generation/reviewing phase
   const inSlidePhase = ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
   if (inSlidePhase) {
     elements.promptContainer.style.display = 'none';
     elements.slideControls.style.display = 'flex';
+    elements.refinePanel.style.display = 'block';
+  } else {
+    elements.promptContainer.style.display = 'flex';
+    elements.slideControls.style.display = 'none';
+    elements.refinePanel.style.display = 'none';
   }
 }
 
@@ -113,6 +130,8 @@ export function renderOutline(onItemClick = null) {
   elements.outlineList.innerHTML = state.outline.map((item, index) => {
     const isActive = index === state.currentIndex;
     const isApproved = state.slides.some(s => s.index === index);
+    const isDraft = !!state.draftSlides[index];
+    const isGenerating = !!state.generatingSlides[index];
     const isPast = index < state.currentIndex && !isApproved;
 
     let badge;
@@ -134,7 +153,7 @@ export function renderOutline(onItemClick = null) {
                   background: ${bgColor}; transition: background 0.15s;">
         <span style="color: ${numColor}; font-family: var(--font-mono); min-width: 22px; font-size: 0.75rem;">${badge}</span>
         <div style="flex: 1; color: ${textColor}; font-weight: ${weight};">${item.title}</div>
-        ${isApproved ? '<span style="font-size:0.65rem;color:#10b981;opacity:0.7;">saved</span>' : ''}
+        ${isApproved ? '<span style="font-size:0.65rem;color:#10b981;opacity:0.7;">approved</span>' : isGenerating ? '<span style="font-size:0.65rem;color:#fbbf24;opacity:0.85;">generating</span>' : isDraft ? '<span style="font-size:0.65rem;color:#60a5fa;opacity:0.85;">ready</span>' : '<span style="font-size:0.65rem;color:#6b7280;opacity:0.85;">pending</span>'}
       </div>
     `;
   }).join('');
@@ -241,4 +260,39 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
 </body>
 </html>
   `;
+}
+
+export function renderOutlineContentSummary() {
+  const rows = state.outline.map((item, idx) => `
+    <div style="padding: 10px 0; border-bottom: 1px solid #222;">
+      <div style="font-weight: 600; color: #fff;">${idx + 1}. ${item.title}</div>
+      <div style="color:#9ca3af; margin-top:4px; font-size: 0.85rem;">Intent: ${item.intent} | Layout: ${item.layout_hint}</div>
+      <ul style="margin: 6px 0 0 18px; color: #d1d5db; font-size: 0.85rem;">
+        ${(item.key_points || []).map(p => `<li>${p}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+
+  elements.slideIframe.srcdoc = `
+  <html>
+    <body style="margin:0; background:#090909; color:#e5e7eb; font-family: Inter, Arial, sans-serif;">
+      <div style="max-width: 980px; margin: 0 auto; padding: 28px;">
+        <h2 style="margin:0 0 6px; color:#60a5fa; text-transform:uppercase; letter-spacing:0.08em; font-size:0.8rem;">Phase 1: Content Plan Review</h2>
+        <h1 style="margin:0 0 14px; font-size:1.3rem;">Approve this full content outline before slide design/generation</h1>
+        <div style="padding: 14px; border:1px solid #1f2937; border-radius:8px; background:#111827;">${rows}</div>
+      </div>
+    </body>
+  </html>
+  `;
+}
+
+export function renderImageThumbs(files, target) {
+  target.innerHTML = '';
+  files.slice(0, 8).forEach(file => {
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.title = file.name;
+    img.src = URL.createObjectURL(file);
+    target.appendChild(img);
+  });
 }

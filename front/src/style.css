@@ -237,6 +237,23 @@ footer {
   box-shadow: 0 0 15px var(--accent-glow);
 }
 
+.thumb-strip {
+  display: flex;
+  gap: 8px;
+  min-height: 34px;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.thumb {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  object-fit: cover;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+}
+
 .status-indicator {
   display: flex;
   align-items: center;

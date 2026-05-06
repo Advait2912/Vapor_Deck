@@ -24,11 +24,29 @@ export async function getActiveSession() {
   return response.json();
 }
 
+export async function deleteSession(sessionId) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}`, {
+    method: 'DELETE'
+  });
+  return response.json();
+}
+
 export async function uploadText(sessionId, text, role = 'topic') {
   const response = await fetch(`${BASE_URL}/session/${sessionId}/upload/text`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, role })
+  });
+  return response.json();
+}
+
+export async function uploadFile(sessionId, file, role = 'reference') {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('role', role);
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/upload`, {
+    method: 'POST',
+    body: form
   });
   return response.json();
 }
@@ -70,7 +88,11 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
     : `${BASE_URL}/session/${sessionId}/slide/${slideIndex}`;
 
   const body = isRefine
-    ? JSON.stringify({ mode: extra.refineMode ?? 'expand', current_html: extra.currentHtml ?? '' })
+    ? JSON.stringify({
+        mode: extra.refineMode ?? 'expand',
+        current_html: extra.currentHtml ?? '',
+        instruction: extra.instruction ?? ''
+      })
     : undefined;
 
   const response = await fetch(endpoint, {
@@ -79,7 +101,8 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
       'Accept': 'text/event-stream',
       ...(isRefine ? { 'Content-Type': 'application/json' } : {})
     },
-    ...(body ? { body } : {})
+    ...(body ? { body } : {}),
+    ...(extra.signal ? { signal: extra.signal } : {})
   });
 
   if (!response.ok) {

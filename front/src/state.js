@@ -5,12 +5,16 @@ export const state = {
   sessionId: null,
   outline: [],
   slides: [],
+  draftSlides: {},
+  generatingSlides: {},
   currentIndex: 0,
   currentSlideHtml: '',
   status: 'IDLE', // IDLE | OUTLINING | GENERATING | REVIEWING | DONE
+  phase: 'CONTENT', // CONTENT | DESIGN
   theme: 'dark-tech',
   model: 'ollama/gemma4:31b-cloud',
-  projectPath: ''
+  projectPath: '',
+  uploadedAssets: []
 };
 
 /**

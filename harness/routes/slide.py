@@ -8,6 +8,7 @@ POST /api/session/{id}/slide/{n}/refine   — refine current slide (Day 2)
 import json
 import logging
 import os
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,25 @@ logger = logging.getLogger("slide")
 router = APIRouter()
 
 
+async def _update_context_in_background(session_id: str, html: str, model_name: str):
+    """Update deck context without blocking approve response."""
+    try:
+        session = get_session(session_id)
+        model = get_model(model_name)
+        update_prompt = build_context_update_prompt(html, session.deck_context)
+        raw_ctx = await collect_stream(
+            model,
+            [{"role": "user", "content": update_prompt}],
+            CONTEXT_UPDATE_SYSTEM,
+        )
+        updated_ctx = json.loads(strip_fences(raw_ctx))
+        updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
+        session.deck_context = updated_ctx
+        save_session(session)
+    except Exception as e:
+        logger.warning(f"[{session_id}] background context update failed (non-fatal): {e}")
+
+
 class ApproveSlideRequest(BaseModel):
     html: str
 
@@ -32,6 +52,7 @@ class ApproveSlideRequest(BaseModel):
 class RefineSlideRequest(BaseModel):
     mode: str  # "simplify" | "expand" | "example" | "interactive"
     current_html: str
+    instruction: str | None = None
 
 
 @router.post("/session/{session_id}/slide/{n}")
@@ -140,21 +161,6 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
             detail="HTML does not appear to contain a valid slide section"
         )
 
-    model = get_model(session.text_model)
-    update_prompt = build_context_update_prompt(req.html, session.deck_context)
-
-    try:
-        raw_ctx = await collect_stream(
-            model,
-            [{"role": "user", "content": update_prompt}],
-            CONTEXT_UPDATE_SYSTEM,
-        )
-        updated_ctx = json.loads(strip_fences(raw_ctx))
-        updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
-        session.deck_context = updated_ctx
-    except Exception as e:
-        logger.warning(f"[{session_id}] context update failed (non-fatal): {e}")
-
     slide_data = SlideData(
         index=n,
         title=slide_spec.title,
@@ -171,6 +177,7 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
     is_done = n >= len(session.outline)
     session.status = "done" if is_done else "generating"
     save_session(session)
+    asyncio.create_task(_update_context_in_background(session_id, req.html, session.text_model))
 
     # Save individual HTML file for convenience
     try:
@@ -224,6 +231,12 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
     }
 
     model = get_model(session.text_model)
+    relevant = get_relevant_chunks(
+        session,
+        slide_intent=f"{slide_spec.title} {' '.join(slide_spec.key_points)} {req.instruction or ''}",
+        max_tokens=1500,
+    )
+
     prompt = build_slide_prompt(
         n=n,
         total=len(session.outline),
@@ -233,7 +246,11 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         layout_hint=slide_spec.layout_hint,
         theme=session.theme,
         deck_context=session.deck_context,
+        relevant_chunks=relevant,
     ) + f"\n\n=== REFINEMENT INSTRUCTION ===\n{MODE_INSTRUCTIONS[req.mode]}"
+
+    if req.instruction and req.instruction.strip():
+        prompt += f"\nAdditional user instruction: {req.instruction.strip()}"
 
     logger.info(f"[{session_id}] refining slide {n} mode={req.mode}")
 

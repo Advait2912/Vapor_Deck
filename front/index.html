@@ -52,7 +52,14 @@
         <div id="v-resizer" class="v-resizer"></div>
         <div class="interaction-bar">
           <div id="prompt-container" style="flex: 1; display: flex; gap: 12px; align-items: stretch; height: 100%;">
-            <textarea id="prompt-input" placeholder="Enter a topic, paste a doc, or link a transcript..." style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+              <textarea id="prompt-input" placeholder="Enter the initial deck topic and context..." style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="btn" for="topic-image-input">Upload Topic/Style Images</label>
+                <input id="topic-image-input" type="file" accept="image/*" multiple style="display:none;" />
+                <div id="topic-image-thumbs" class="thumb-strip"></div>
+              </div>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
               <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Generate Deck</button>
               <button id="new-deck-btn" class="btn" style="flex: 1; padding: 0 16px; font-size: 0.75rem; opacity: 0.6;" title="Discard current session and start fresh">↺ New Deck</button>
@@ -65,8 +72,19 @@
             <button class="btn" id="refine-example">Add Example</button>
             <button class="btn" id="refine-interactive">Make Interactive</button>
             <div style="flex: 1;"></div>
+            <button class="btn" id="stop-btn">Stop</button>
             <button class="btn" id="regen-btn">↻ Regen</button>
             <button class="btn primary" id="approve-btn">Approve Slide →</button>
+          </div>
+        </div>
+        <div id="refine-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 10px 20px;">
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <textarea id="refine-instruction-input" placeholder="Optional refine instructions (e.g. use fewer words, add metric chart, shift visual hierarchy)..." style="flex:1; min-height:72px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 10px; border-radius: 4px; outline: none; resize: vertical; font-family: inherit; font-size: 0.85rem;"></textarea>
+            <div style="display:flex; flex-direction:column; gap:8px; min-width: 240px;">
+              <label class="btn" for="refine-image-input" style="justify-content:center;">Attach Refine Images</label>
+              <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
+              <div id="refine-image-thumbs" class="thumb-strip"></div>
+            </div>
           </div>
         </div>
       </main>

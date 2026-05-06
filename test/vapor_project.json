@@ -1,0 +1,220 @@
+{
+  "session_id": "58c10a6d-780c-47ca-92b3-0130cbe16686",
+  "status": "generating",
+  "text_model": "ollama/gemma4:31b-cloud",
+  "vision_model": "google/gemini-2.0-flash",
+  "theme": "dark-tech",
+  "input_units": [
+    {
+      "unit_id": "d3d32a31-c9c0-45b9-8457-75a8538b0993",
+      "session_id": "58c10a6d-780c-47ca-92b3-0130cbe16686",
+      "file_hash": "f8c8986f68dc52eed7f972b32810055d96c91c1ca27639c563f01e8a6d5a1aa1",
+      "input_type": "text",
+      "role": "topic",
+      "filename": null,
+      "raw_path": null,
+      "chunks": [
+        {
+          "chunk_id": "37215cf1",
+          "text": "so the topic is blockchain and its future scope....keep a dark theme and make sure that you add star like ojects floating in the background",
+          "token_count": 34,
+          "source_page": null
+        }
+      ],
+      "token_budget": 34,
+      "visual_summary": null,
+      "layout_hints": [],
+      "color_palette": [],
+      "font_hints": [],
+      "instructions_parsed": [],
+      "created_at": "2026-05-06T11:26:51.666705+00:00"
+    }
+  ],
+  "input_hash_index": {
+    "f8c8986f68dc52eed7f972b32810055d96c91c1ca27639c563f01e8a6d5a1aa1": "d3d32a31-c9c0-45b9-8457-75a8538b0993"
+  },
+  "topic": "Blockchain and Its Future Scope",
+  "derived_color_palette": [],
+  "derived_font_hints": [],
+  "hard_constraints": [],
+  "deck_context": {
+    "deck": {
+      "title": "Blockchain and Its Future Scope",
+      "theme": "dark-tech",
+      "total_slides": 7,
+      "audience": "Tech enthusiasts, students, and business stakeholders",
+      "tone": "Futuristic and Technical"
+    },
+    "context": {
+      "key_terms_defined": [
+        "Immutability"
+      ],
+      "concepts_covered": [
+        "Security Architecture",
+        "Hash chaining",
+        "Block structure"
+      ],
+      "facts_stated": [
+        "Blocks are linked via hashes to ensure a secure, immutable chain."
+      ],
+      "running_narrative": "The presentation has begun, moving from introductory concepts into the technical security architecture and the mechanism of immutability within the blockchain."
+    },
+    "slides_summary": [
+      {
+        "index": 1,
+        "title": "Security Architecture and Immutability",
+        "covered": [
+          "Block chaining mechanism",
+          "Hash-based security",
+          "Data immutability"
+        ],
+        "layout_style": "Visual mechanism chain with a grid of descriptive point cards"
+      }
+    ],
+    "synthesis": {
+      "topic": "Blockchain and Its Future Scope",
+      "audience": "Tech enthusiasts, students, and business stakeholders",
+      "tone": "Futuristic and Technical",
+      "key_themes": [
+        "Foundations of Blockchain Technology",
+        "Decentralization and Security",
+        "Current Industry Applications",
+        "Future Trends and Scalability",
+        "Integration with AI and IoT"
+      ],
+      "key_facts": [
+        "Blockchain functions as a distributed ledger technology",
+        "Immutability is a core feature ensuring data integrity",
+        "Smart contracts automate agreements without intermediaries",
+        "Potential for disruption in finance, healthcare, and supply chain management"
+      ],
+      "narrative_arc": "An exploration starting from the basic mechanics of blockchain, moving through current real-world use cases, and culminating in a visionary look at how it will reshape the global digital infrastructure.",
+      "hard_constraints": [],
+      "style_intent": {
+        "suggested_theme": "dark-tech",
+        "color_notes": "Deep black/navy backgrounds with neon accents and floating star-like celestial objects",
+        "layout_preference": "Modern, spacious layouts with floating elements and glowing gradients",
+        "extracted_palette": [],
+        "extracted_fonts": []
+      },
+      "input_unit_count": 1,
+      "reference_tokens_used": 0
+    }
+  },
+  "outline": [
+    {
+      "index": 1,
+      "title": "Blockchain and Its Future Scope",
+      "intent": "title-hero",
+      "key_points": [
+        "The evolution of digital trust",
+        "From cryptocurrency to global infrastructure",
+        "Redefining the decentralized web"
+      ],
+      "layout_hint": "hero-centered"
+    },
+    {
+      "index": 2,
+      "title": "The Foundation: Distributed Ledger Technology",
+      "intent": "explain-concept",
+      "key_points": [
+        "Definition of a distributed ledger",
+        "The role of peer-to-peer networking",
+        "Elimination of central authority",
+        "Mechanism of consensus across nodes"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 3,
+      "title": "Security Architecture and Immutability",
+      "intent": "explain-mechanism",
+      "key_points": [
+        "Cryptographic hashing and chaining",
+        "The concept of the immutable record",
+        "Preventing unauthorized data alteration",
+        "Ensuring absolute data integrity"
+      ],
+      "layout_hint": "single-column"
+    },
+    {
+      "index": 4,
+      "title": "Smart Contracts: Automating Trust",
+      "intent": "show-example",
+      "key_points": [
+        "Self-executing digital agreements",
+        "Removal of third-party intermediaries",
+        "Deterministic logic execution",
+        "Real-world trigger-based payouts"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 5,
+      "title": "Industry Disruption and Use Cases",
+      "intent": "list-points",
+      "key_points": [
+        "Finance: Instant cross-border settlements",
+        "Healthcare: Secure patient data interoperability",
+        "Supply Chain: End-to-end provenance tracking",
+        "Governance: Transparent voting systems"
+      ],
+      "layout_hint": "bullet-list"
+    },
+    {
+      "index": 6,
+      "title": "The Convergence: AI and IoT Integration",
+      "intent": "explain-concept",
+      "key_points": [
+        "AI-driven autonomous smart contracts",
+        "IoT device identity and secure telemetry",
+        "Decentralized AI model training",
+        "Machine-to-machine micro-payments"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 7,
+      "title": "Scaling the Future Digital Infrastructure",
+      "intent": "summary",
+      "key_points": [
+        "Transition from Layer 1 to Layer 2 scaling",
+        "Solving the Blockchain Trilemma",
+        "The shift toward a decentralized internet",
+        "Preparing for global mass adoption"
+      ],
+      "layout_hint": "bullet-list"
+    }
+  ],
+  "slides": [
+    {
+      "index": 1,
+      "title": "Blockchain and Its Future Scope",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg); color: var(--text); font-family: var(--font-body); position: relative; overflow: hidden;\">\n  <style>\n    .hero-container {\n      text-align: center;\n      z-index: 10;\n      max-width: 80%;\n      margin: 0 auto;\n    }\n    .hero-title {\n      font-family: var(--font-head);\n      font-size: clamp(2.5rem, 6vw, 5rem);\n      line-height: 1.1;\n      margin-bottom: 1.5rem;\n      background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);\n      -webkit-background-clip: text;\n      -webkit-text-fill-color: transparent;\n      font-weight: 800;\n    }\n    .hero-subtitle {\n      font-size: clamp(1.1rem, 2vw, 1.8rem);\n      color: var(--text-muted);\n      max-width: 700px;\n      margin: 0 auto 3rem auto;\n      line-height: 1.6;\n    }\n    .hero-grid {\n      display: grid;\n      grid-template-columns: repeat(3, 1fr);\n      gap: 2rem;\n      margin-top: 4rem;\n    }\n    .grid-item {\n      padding: 1.5rem;\n      border: 1px solid var(--border);\n      background: var(--surface);\n      border-radius: 12px;\n      font-size: clamp(0.8rem, 1.2vw, 1rem);\n      color: var(--text-muted);\n      transition: all 0.3s ease;\n    }\n    .grid-item:hover {\n      border-color: var(--accent);\n      box-shadow: 0 0 20px var(--accent-glow);\n      transform: translateY(-5px);\n    }\n    .grid-item strong {\n      display: block;\n      color: var(--accent);\n      margin-bottom: 0.5rem;\n      font-size: 1.2em;\n    }\n    .bg-decor {\n      position: absolute;\n      width: 600px;\n      height: 600px;\n      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);\n      opacity: 0.15;\n      filter: blur(60px);\n      z-index: 1;\n      pointer-events: none;\n    }\n    .decor-1 { top: -20%; right: -10%; }\n    .decor-2 { bottom: -20%; left: -10%; }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.8s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to { opacity: 1; transform: translateY(0); }\n    }\n  </style>\n\n  <div class=\"bg-decor decor-1\"></div>\n  <div class=\"bg-decor decor-2\"></div>\n\n  <div class=\"hero-container\">\n    <h1 class=\"hero-title reveal\" style=\"--delay: 0.2s\">Blockchain and Its Future Scope</h1>\n    <p class=\"hero-subtitle reveal\" style=\"--delay: 0.5s\">\n      Beyond digital currency: exploring the evolution of trust and the architectural shift toward a truly decentralized global infrastructure.\n    </p>\n    \n    <div class=\"hero-grid\">\n      <div class=\"grid-item reveal\" style=\"--delay: 0.8s\">\n        <strong>Digital Trust</strong>\n        Evolution from centralized authorities to cryptographic verification.\n      </div>\n      <div class=\"grid-item reveal\" style=\"--delay: 1s\">\n        <strong>Infrastructure</strong>\n        Scaling from niche cryptocurrency to the backbone of global data.\n      </div>\n      <div class=\"grid-item reveal\" style=\"--delay: 1.2s\">\n        <strong>Web 3.0</strong>\n        Redefining the internet through user-owned protocols and sovereignty.\n      </div>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "approved": true
+    },
+    {
+      "index": 2,
+      "title": "The Foundation: Distributed Ledger Technology",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: grid;\n      grid-template-rows: auto 1fr;\n      padding: clamp(2rem, 5vh, 5rem);\n      gap: clamp(1rem, 3vh, 3rem);\n      overflow: hidden;\n    }\n\n    .slide-header h1 {\n      font-family: var(--font-head);\n      font-size: clamp(1.5rem, 4vw, 3rem);\n      color: var(--accent);\n      margin: 0;\n      text-shadow: 0 0 15px var(--accent-glow);\n    }\n\n    .slide-content {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: clamp(2rem, 5vw, 4rem);\n      align-items: start;\n    }\n\n    .concept-text {\n      font-size: clamp(1rem, 2vw, 1.25rem);\n      line-height: 1.6;\n      color: var(--text-muted);\n    }\n\n    .concept-text p {\n      margin-bottom: 1.5rem;\n    }\n\n    .feature-grid {\n      display: grid;\n      grid-template-columns: 1fr;\n      gap: 1rem;\n    }\n\n    .feature-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      padding: 1.5rem;\n      border-radius: 8px;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n    }\n\n    .feature-card:hover {\n      border-color: var(--accent);\n      transform: translateX(10px);\n    }\n\n    .feature-card h3 {\n      color: var(--text);\n      font-family: var(--font-head);\n      font-size: clamp(1.1rem, 2vw, 1.4rem);\n      margin: 0 0 0.5rem 0;\n    }\n\n    .feature-card p {\n      font-size: clamp(0.9rem, 1.8vw, 1.1rem);\n      color: var(--text-muted);\n      margin: 0;\n    }\n\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n\n    @media (max-width: 768px) {\n      .slide-content {\n        grid-template-columns: 1fr;\n      }\n    }\n  </style>\n\n  <div class=\"slide-header\">\n    <h1 class=\"reveal\" style=\"--delay: 0.1s\">The Foundation: Distributed Ledger Technology</h1>\n  </div>\n\n  <div class=\"slide-content\">\n    <div class=\"concept-text reveal\" style=\"--delay: 0.3s\">\n      <p>\n        At its core, a <strong>Distributed Ledger</strong> is a database that is consensually shared and synchronized across multiple sites, institutions, or geographies.\n      </p>\n      <p>\n        Unlike traditional databases, there is no central administrator. Every node in the network maintains an identical copy of the ledger, ensuring redundancy and transparency.\n      </p>\n    </div>\n\n    <div class=\"feature-grid\">\n      <div class=\"feature-card reveal\" style=\"--delay: 0.5s\">\n        <h3>P2P Networking</h3>\n        <p>Direct communication between nodes eliminates the need for intermediary servers or gateways.</p>\n      </div>\n      <div class=\"feature-card reveal\" style=\"--delay: 0.7s\">\n        <h3>Decentralization</h3>\n        <p>Removes the \"Single Point of Failure\" by stripping away the central authority.</p>\n      </div>\n      <div class=\"feature-card reveal\" style=\"--delay: 0.9s\">\n        <h3>Consensus Mechanisms</h3>\n        <p>Algorithmic agreements (like PoW or PoS) ensure all nodes agree on the ledger's state.</p>\n      </div>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "approved": true
+    },
+    {
+      "index": 3,
+      "title": "Security Architecture and Immutability",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg); color: var(--text); font-family: var(--font-body);\">\n  <style>\n    .slide-content {\n      width: 90%;\n      max-width: 1100px;\n      display: flex;\n      flex-direction: column;\n      gap: 3rem;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(1.8rem, 4vw, 3rem);\n      color: var(--text);\n      text-align: center;\n      margin: 0;\n    }\n    .mechanism-container {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;\n      gap: 1rem;\n      padding: 2rem 0;\n      overflow-x: auto;\n    }\n    .chain-node {\n      flex: 1;\n      background: var(--surface);\n      border: 2px solid var(--border);\n      border-radius: 8px;\n      padding: 1.5rem;\n      text-align: center;\n      position: relative;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n    }\n    .chain-node:hover {\n      border-color: var(--accent);\n      transform: translateY(-5px);\n      box-shadow: 0 0 20px var(--accent-glow);\n    }\n    .chain-node .node-label {\n      font-size: 0.9rem;\n      color: var(--text-muted);\n      text-transform: uppercase;\n      margin-bottom: 0.5rem;\n      display: block;\n    }\n    .chain-node .hash-val {\n      font-family: monospace;\n      font-size: clamp(0.7rem, 1.2vw, 1rem);\n      color: var(--accent);\n      word-break: break-all;\n    }\n    .chain-arrow {\n      color: var(--border);\n      font-size: 2rem;\n      font-weight: bold;\n    }\n    .points-grid {\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n      gap: 1.5rem;\n    }\n    .point-card {\n      background: var(--surface);\n      padding: 1.5rem;\n      border-left: 4px solid var(--accent);\n      border-radius: 4px;\n    }\n    .point-card h3 {\n      font-family: var(--font-head);\n      font-size: clamp(1rem, 1.5vw, 1.25rem);\n      margin: 0 0 0.5rem 0;\n      color: var(--accent);\n    }\n    .point-card p {\n      font-size: clamp(0.9rem, 1.2vw, 1rem);\n      color: var(--text-muted);\n      margin: 0;\n      line-height: 1.5;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n  </style>\n\n  <div class=\"slide-content\">\n    <h1 class=\"slide-title reveal\" style=\"--delay: 0.1s\">Security Architecture and Immutability</h1>\n\n    <div class=\"mechanism-container\">\n      <div class=\"chain-node reveal\" style=\"--delay: 0.3s\">\n        <span class=\"node-label\">Block N</span>\n        <div class=\"hash-val\">Prev: 0000<br>Hash: 8a2f1c</div>\n      </div>\n      <div class=\"chain-arrow reveal\" style=\"--delay: 0.4s\">→</div>\n      <div class=\"chain-node reveal\" style=\"--delay: 0.5s\">\n        <span class=\"node-label\">Block N+1</span>\n        <div class=\"hash-val\">Prev: 8a2f1c<br>Hash: 3b9e7d</div>\n      </div>\n      <div class=\"chain-arrow reveal\" style=\"--delay: 0.6s\">→</div>\n      <div class=\"chain-node reveal\" style=\"--delay: 0.7s\">\n        <span class=\"node-label\">Block N+2</span>\n        <div class=\"hash-val\">Prev: 3b9e7d<br>Hash: f4a2c1</div>\n      </div>\n    </div>\n\n    <div class=\"points-grid\">\n      <div class=\"point-card reveal\" style=\"--delay: 0.9s\">\n        <h3>Cryptographic Chaining</h3>\n        <p>Each record contains a hash of the previous block, creating a mathematical link that spans the entire history.</p>\n      </div>\n      <div class=\"point-card reveal\" style=\"--delay: 1.1s\">\n        <h3>Immutable Records</h3>\n        <p>Once committed, data cannot be edited or deleted without breaking the chain, rendering the ledger append-only.</p>\n      </div>\n      <div class=\"point-card reveal\" style=\"--delay: 1.3s\">\n        <h3>Alteration Prevention</h3>\n        <p>Changing a single bit of data changes the resulting hash, immediately alerting the system to unauthorized tampering.</p>\n      </div>\n      <div class=\"point-card reveal\" style=\"--delay: 1.5s\">\n        <h3>Absolute Integrity</h3>\n        <p>Trust is shifted from a central authority to the immutable laws of mathematics and distributed verification.</p>\n      </div>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "approved": true
+    },
+    {
+      "index": 6,
+      "title": "The Convergence: AI and IoT Integration",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: flex;\n      flex-direction: column;\n      padding: clamp(2rem, 5vw, 5rem);\n      gap: 2rem;\n      overflow: hidden;\n    }\n    .slide-header {\n      margin-bottom: 1rem;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin: 0;\n      background: linear-gradient(90deg, var(--text), var(--accent));\n      -webkit-background-clip: text;\n      -webkit-text-fill-color: transparent;\n    }\n    .grid-container {\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\n      gap: 2rem;\n      flex-grow: 1;\n    }\n    .concept-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: clamp(1.5rem, 3vw, 2.5rem);\n      position: relative;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n      display: flex;\n      flex-direction: column;\n      gap: 1rem;\n    }\n    .concept-card:hover {\n      border-color: var(--accent);\n      transform: translateY(-5px);\n    }\n    .concept-card h3 {\n      font-family: var(--font-head);\n      font-size: clamp(1.25rem, 2vw, 1.75rem);\n      color: var(--accent);\n      margin: 0;\n    }\n    .concept-card p {\n      font-size: clamp(1rem, 1.5vw, 1.25rem);\n      color: var(--text-muted);\n      line-height: 1.6;\n      margin: 0;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n    .visual-accent {\n      position: absolute;\n      top: 0;\n      right: 0;\n      width: 40px;\n      height: 40px;\n      background: var(--accent-glow);\n      filter: blur(15px);\n      border-radius: 50%;\n    }\n  </style>\n\n  <div class=\"slide-header\">\n    <h1 class=\"slide-title reveal\" style=\"--delay: 0.1s\">The Convergence: AI and IoT Integration</h1>\n  </div>\n\n  <div class=\"grid-container\">\n    <div class=\"concept-card reveal\" style=\"--delay: 0.3s\">\n      <div class=\"visual-accent\"></div>\n      <h3>Autonomous Intelligence</h3>\n      <p>AI-driven smart contracts that trigger based on real-world IoT telemetry, enabling self-executing agreements without human intermediaries.</p>\n    </div>\n\n    <div class=\"concept-card reveal\" style=\"--delay: 0.5s\">\n      <div class=\"visual-accent\"></div>\n      <h3>Secure Identity & Data</h3>\n      <p>Unique decentralized IDs for every IoT sensor, ensuring secure telemetry and verifiable data provenance for AI training sets.</p>\n    </div>\n\n    <div class=\"concept-card reveal\" style=\"--delay: 0.7s\">\n      <div class=\"visual-accent\"></div>\n      <h3>Decentralized Learning</h3>\n      <p>Distributed AI model training where IoT edge devices compute gradients locally, preserving privacy via federated learning.</p>\n    </div>\n\n    <div class=\"concept-card reveal\" style=\"--delay: 0.9s\">\n      <div class=\"visual-accent\"></div>\n      <h3>Machine Economy</h3>\n      <p>M2M micro-payments allowing IoT devices to purchase resources or sell data autonomously using high-throughput blockchain layers.</p>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "approved": true
+    }
+  ],
+  "current_index": 6
+}

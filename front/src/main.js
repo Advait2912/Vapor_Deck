@@ -1,20 +1,29 @@
 import './style.css';
 import { 
   createSession, 
+  uploadFile,
   uploadText, 
   synthesize, 
   generateOutline, 
   confirmOutline,
   streamSlide,
   approveSlide as approveSlideApi,
+  deleteSession,
   getProjectInfo,
   getActiveSession
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
-import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide } from './ui.js';
+import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide, renderOutlineContentSummary, renderImageThumbs } from './ui.js';
 import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
+
+let pendingTopicImages = [];
+let pendingRefineImages = [];
+let lastRefinedHtml = '';
+const activeSlideControllers = new Map();
+let activeRefineController = null;
+let sessionRunToken = 0;
 
 // ── Initialization ────────────────────────────────────────────────────────────
 async function init() {
@@ -22,14 +31,20 @@ async function init() {
   
   setupEventListeners({
     onStartGeneration: startGeneration,
+    onTopicImagesSelected: handleTopicImagesSelected,
+    onRefineImagesSelected: handleRefineImagesSelected,
     onExport: handleExport,
     onConfirmOutline: handleConfirmOutline,
     onApproveSlide: approveSlide,
     onRefine: startRefinement,
+    onRegenerate: regenerateCurrentSlide,
+    onStopGeneration: stopConversation,
     onNewDeck: handleNewDeck,
     onUseRefined: () => {
-      state.currentSlideHtml = elements.iframeAfter.srcdoc;
-      renderSlide(state.currentSlideHtml);
+      if (!lastRefinedHtml.trim()) return;
+      state.currentSlideHtml = lastRefinedHtml;
+      state.draftSlides[state.currentIndex] = lastRefinedHtml;
+      renderSlide(lastRefinedHtml);
     }
   });
 
@@ -68,14 +83,17 @@ async function loadProjectInfo() {
 
       const s = state.status;
       if (s === 'REVIEWING_OUTLINE') {
-        renderPlaceholder('Review the outline in the sidebar, then click "Start Generation →" or "Confirm" to begin.');
+        state.phase = 'CONTENT';
+        renderOutlineContentSummary();
       } else if (s === 'GENERATING') {
-        // Resume slide generation from where we left off
-        renderPlaceholder(`Resuming: Generating Slide ${state.currentIndex + 1}...`);
-        startSlideGeneration();
+        state.phase = 'DESIGN';
+        startAllSlidesGeneration();
+        renderPlaceholder(`Resuming generation in background...`);
       } else if (s === 'REVIEWING') {
+        state.phase = 'DESIGN';
         renderPlaceholder('Slide ready for review. Approve or refine.');
       } else if (s === 'DONE') {
+        state.phase = 'DESIGN';
         renderPlaceholder('Deck complete! Export or start a new deck.');
       } else if (state.outline.length > 0) {
         renderPlaceholder('Project loaded. Ready to continue.');
@@ -89,13 +107,19 @@ async function loadProjectInfo() {
 
 // ── New Deck ──────────────────────────────────────────────────────────────────
 function handleNewDeck() {
+  stopAllGeneration();
+  pendingTopicImages = [];
+  pendingRefineImages = [];
   updateState({
     sessionId: null,
     outline: [],
     slides: [],
+    draftSlides: {},
+    generatingSlides: {},
     currentIndex: 0,
     currentSlideHtml: '',
     status: 'IDLE',
+    phase: 'CONTENT',
     projectPath: state.projectPath // keep path
   });
   elements.outlineList.innerHTML = `<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">No outline generated yet. Submit a topic to begin.</div>`;
@@ -103,6 +127,9 @@ function handleNewDeck() {
   elements.slideControls.style.display = 'none';
   elements.confirmOutlineBtn.style.display = 'none';
   elements.promptInput.value = '';
+  elements.refineInstructionInput.value = '';
+  elements.topicImageThumbs.innerHTML = '';
+  elements.refineImageThumbs.innerHTML = '';
   elements.promptInput.disabled = false;
   elements.visionStatus.style.display = 'none';
   renderPlaceholder('Slide Preview Area');
@@ -124,6 +151,9 @@ async function startGeneration(prompt) {
     elements.generateBtn.textContent = 'Uploading...';
     updateUI();
     await uploadText(state.sessionId, prompt, 'topic');
+    for (const image of pendingTopicImages) {
+      await uploadFile(state.sessionId, image, 'reference');
+    }
 
     elements.generateBtn.textContent = 'Synthesizing...';
     await synthesize(state.sessionId);
@@ -135,9 +165,10 @@ async function startGeneration(prompt) {
     state.outline = outlineData.outline;
 
     state.status = 'REVIEWING_OUTLINE';
+    state.phase = 'CONTENT';
     renderOutline(navigateToSlide);
     updateUI();
-    renderPlaceholder('Review the outline, then click "Start Generation →" to begin.');
+    renderOutlineContentSummary();
   } catch (error) {
     console.error('Generation failed:', error);
     state.status = 'ERROR';
@@ -158,19 +189,29 @@ async function handleConfirmOutline() {
     await confirmOutline(state.sessionId, state.outline);
 
     state.status = 'GENERATING';
+    state.phase = 'DESIGN';
     state.currentIndex = 0;
     elements.confirmOutlineBtn.style.display = 'none';
     elements.confirmOutlineBtn.disabled = false;
     elements.confirmOutlineBtn.textContent = 'Confirm';
     updateUI(); // this will flip to slide-controls via updateUI's inSlidePhase logic
 
-    startSlideGeneration();
+    startAllSlidesGeneration();
+    navigateToSlide(0);
   } catch (error) {
     console.error('Confirmation failed:', error);
     state.status = 'REVIEWING_OUTLINE';
     updateUI();
     elements.confirmOutlineBtn.disabled = false;
     elements.confirmOutlineBtn.textContent = 'Confirm';
+  }
+}
+
+function startAllSlidesGeneration() {
+  for (let i = 0; i < state.outline.length; i++) {
+    if (state.slides.some(s => s.index === i)) continue;
+    if (state.draftSlides[i]) continue;
+    startSlideGeneration(i);
   }
 }
 
@@ -182,10 +223,9 @@ async function handleConfirmOutline() {
  * - If it's a future unapproved slide: ignore (user must approve in order).
  */
 function navigateToSlide(index) {
-  // Find saved HTML for this slide
+  state.currentIndex = index;
   const saved = state.slides.find(s => s.index === index);
   if (saved) {
-    state.currentIndex = index;
     state.currentSlideHtml = saved.html;
     state.status = 'REVIEWING';
     renderSlide(saved.html);
@@ -193,37 +233,65 @@ function navigateToSlide(index) {
     updateUI();
     return;
   }
-  // If it's the next ungenerated slide, start generation
-  if (index === state.currentIndex && (state.status === 'GENERATING' || state.status === 'REVIEWING')) {
-    startSlideGeneration();
+
+  const draft = state.draftSlides[index];
+  if (draft) {
+    state.currentSlideHtml = draft;
+    state.status = 'REVIEWING';
+    renderSlide(draft);
+    renderOutline(navigateToSlide);
+    updateUI();
     return;
   }
-  // Can't jump to future unapproved slides
-  console.log(`Slide ${index + 1} not yet generated — approve slides in order.`);
+
+  if (state.generatingSlides[index]) {
+    renderPlaceholder(`Slide ${index + 1} is generating in the background...`);
+    renderOutline(navigateToSlide);
+    updateUI();
+    return;
+  }
+
+  startSlideGeneration(index);
 }
 
 // ── Slide Generation ──────────────────────────────────────────────────────────
-async function startSlideGeneration() {
+async function startSlideGeneration(index = state.currentIndex, force = false) {
+  if (state.generatingSlides[index] && !force) return;
+  if (force && activeSlideControllers.has(index)) {
+    activeSlideControllers.get(index).abort();
+  }
+
   state.status = 'GENERATING';
+  state.generatingSlides[index] = true;
+  const runToken = sessionRunToken;
   updateUI();
+  renderOutline(navigateToSlide);
 
-  const slideNum = state.currentIndex + 1; // backend is 1-indexed
-  const slideTitle = state.outline[state.currentIndex]?.title ?? `Slide ${slideNum}`;
+  const slideNum = index + 1; // backend is 1-indexed
+  const slideTitle = state.outline[index]?.title ?? `Slide ${slideNum}`;
 
-  renderPlaceholder(`Generating Slide ${slideNum}: ${slideTitle}...`);
+  if (index === state.currentIndex) {
+    renderPlaceholder(`Generating Slide ${slideNum}: ${slideTitle}...`);
+  }
 
   let slideHtml = '';
+  const controller = new AbortController();
+  activeSlideControllers.set(index, controller);
   try {
-    const stream = streamSlide(state.sessionId, slideNum);
+    const stream = streamSlide(state.sessionId, slideNum, 'generate', { signal: controller.signal });
     for await (const token of stream) {
       slideHtml += token.replace(/\\n/g, '\n'); // unescape backend newlines
-      renderSlide(slideHtml);
     }
 
+    if (runToken !== sessionRunToken) return;
     if (!slideHtml.trim()) throw new Error('Empty slide response from backend');
 
-    state.currentSlideHtml = slideHtml;
-    state.status = 'REVIEWING';
+    state.draftSlides[index] = slideHtml;
+    if (index === state.currentIndex && runToken === sessionRunToken) {
+      state.currentSlideHtml = slideHtml;
+      state.status = 'REVIEWING';
+      renderSlide(slideHtml);
+    }
     updateUI();
     renderOutline(navigateToSlide);
 
@@ -236,33 +304,76 @@ async function startSlideGeneration() {
       elements.visionStatus.style.color = '#10b981';
     }, 1500);
   } catch (error) {
-    console.error('Slide generation failed:', error);
-    state.status = 'ERROR';
+    if (runToken !== sessionRunToken) {
+      return;
+    }
+    if (error?.name === 'AbortError') {
+      if (index === state.currentIndex) {
+        renderPlaceholder(`Stopped generating slide ${slideNum}.`);
+      }
+    } else {
+      console.error('Slide generation failed:', error);
+      state.status = 'ERROR';
+      updateUI();
+      if (index === state.currentIndex) {
+        renderPlaceholder(`Error generating slide ${slideNum}. Check console.`);
+      }
+    }
+  } finally {
+    activeSlideControllers.delete(index);
+    delete state.generatingSlides[index];
+    renderOutline(navigateToSlide);
     updateUI();
-    renderPlaceholder(`Error generating slide ${slideNum}. Check console.`);
   }
 }
 
 // ── Slide Approval ────────────────────────────────────────────────────────────
 async function approveSlide() {
   try {
+    const html = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+    if (!html?.trim()) {
+      renderPlaceholder('Generate this slide first, then approve.');
+      return;
+    }
+    const approvedIndex = state.currentIndex;
+    const slideNum = approvedIndex + 1;
     state.status = 'APPROVING';
     updateUI();
 
-    const slideNum = state.currentIndex + 1;
-    await approveSlideApi(state.sessionId, slideNum, state.currentSlideHtml);
+    state.slides = state.slides.filter(s => s.index !== approvedIndex);
+    state.slides.push({ index: approvedIndex, html });
+    delete state.draftSlides[approvedIndex];
 
-    state.slides.push({ index: state.currentIndex, html: state.currentSlideHtml });
+    if (approvedIndex < state.outline.length - 1) {
+      const nextReadyIndex = state.outline.findIndex((_, idx) => {
+        const alreadyApproved = state.slides.some(s => s.index === idx);
+        return !alreadyApproved && !!state.draftSlides[idx];
+      });
+      const nextPendingIndex = state.outline.findIndex((_, idx) => {
+        const alreadyApproved = state.slides.some(s => s.index === idx);
+        return !alreadyApproved;
+      });
 
-    if (state.currentIndex < state.outline.length - 1) {
-      state.currentIndex++;
-      startSlideGeneration();
+      state.currentIndex = nextReadyIndex >= 0 ? nextReadyIndex : (nextPendingIndex >= 0 ? nextPendingIndex : approvedIndex);
+      const hasCurrentDraft = !!state.draftSlides[state.currentIndex];
+      state.status = hasCurrentDraft ? 'REVIEWING' : 'GENERATING';
+      renderOutline(navigateToSlide);
+      updateUI();
+      if (hasCurrentDraft) {
+        renderSlide(state.draftSlides[state.currentIndex]);
+      } else {
+        renderPlaceholder(`Slide ${state.currentIndex + 1} is still generating. You can approve any ready slide now.`);
+      }
     } else {
       state.status = 'DONE';
       updateUI();
       renderOutline(navigateToSlide);
       renderPlaceholder('🎉 Deck Complete! All slides approved. Use Export PDF to save.');
     }
+
+    approveSlideApi(state.sessionId, slideNum, html).catch((error) => {
+      console.error('Approval sync failed:', error);
+    });
   } catch (error) {
     console.error('Approval failed:', error);
     state.status = 'REVIEWING';
@@ -272,23 +383,84 @@ async function approveSlide() {
 
 // ── Slide Refinement ──────────────────────────────────────────────────────────
 async function startRefinement(mode) {
+  const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+  if (!currentHtml?.trim()) return;
+
+  for (const image of pendingRefineImages) {
+    await uploadFile(state.sessionId, image, 'reference');
+  }
+
   elements.comparisonOverlay.style.display = 'flex';
   elements.iframeBefore.srcdoc = elements.slideIframe.srcdoc;
   renderPlaceholder('Refining...', elements.iframeAfter);
 
   let refinedHtml = '';
+  activeRefineController = new AbortController();
   try {
     const stream = streamSlide(state.sessionId, state.currentIndex + 1, 'refine', {
       refineMode: mode,
-      currentHtml: state.currentSlideHtml
+      currentHtml,
+      instruction: elements.refineInstructionInput.value.trim(),
+      signal: activeRefineController.signal
     });
     for await (const token of stream) {
       refinedHtml += token.replace(/\\n/g, '\n');
-      renderSlide(refinedHtml, elements.iframeAfter);
     }
+    lastRefinedHtml = refinedHtml;
+    renderSlide(refinedHtml, elements.iframeAfter);
   } catch (error) {
-    console.error('Refinement failed:', error);
-    renderPlaceholder(`Refinement error: ${error.message}`, elements.iframeAfter);
+    if (error?.name === 'AbortError') {
+      renderPlaceholder('Refinement stopped.', elements.iframeAfter);
+    } else {
+      console.error('Refinement failed:', error);
+      renderPlaceholder(`Refinement error: ${error.message}`, elements.iframeAfter);
+    }
+  } finally {
+    activeRefineController = null;
+  }
+}
+
+function handleTopicImagesSelected(files) {
+  pendingTopicImages = files;
+  renderImageThumbs(files, elements.topicImageThumbs);
+}
+
+function handleRefineImagesSelected(files) {
+  pendingRefineImages = files;
+  renderImageThumbs(files, elements.refineImageThumbs);
+}
+
+function regenerateCurrentSlide() {
+  startSlideGeneration(state.currentIndex, true);
+}
+
+function stopAllGeneration() {
+  sessionRunToken += 1;
+  for (const controller of activeSlideControllers.values()) {
+    controller.abort();
+  }
+  activeSlideControllers.clear();
+  if (activeRefineController) {
+    activeRefineController.abort();
+    activeRefineController = null;
+  }
+  state.generatingSlides = {};
+  if (state.status === 'GENERATING' || state.status === 'APPROVING') {
+    state.status = state.currentSlideHtml ? 'REVIEWING' : 'IDLE';
+  }
+  renderOutline(navigateToSlide);
+  updateUI();
+  renderPlaceholder('Generation stopped.');
+}
+
+async function stopConversation() {
+  const activeSessionId = state.sessionId;
+  stopAllGeneration();
+  handleNewDeck();
+  if (activeSessionId) {
+    deleteSession(activeSessionId).catch((error) => {
+      console.error('Failed to delete session:', error);
+    });
   }
 }
 
