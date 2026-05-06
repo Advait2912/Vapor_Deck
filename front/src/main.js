@@ -70,6 +70,7 @@ async function loadProjectInfo() {
       updateState({
         sessionId: session.session_id,
         outline: session.outline || [],
+        slides: (session.slides || []).map(s => ({ ...s, index: s.index - 1 })),
         // Normalise backend snake_case status to our uppercase convention
         status: backendStatus.toUpperCase(),
         currentIndex: session.current_index || 0,

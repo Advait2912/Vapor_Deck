@@ -78,6 +78,24 @@ async def generate_slide(session_id: str, n: int):
     if not slide_spec:
         raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
 
+    # Check if slide already exists and is approved or has content
+    existing = next((s for s in session.slides if s.index == n), None)
+    if existing and existing.html:
+        logger.info(f"[{session_id}] slide {n} already exists, streaming from cache")
+        async def cached_stream():
+            safe = existing.html.replace("\n", "\\n")
+            yield f"data: {safe}\n\n"
+            yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            cached_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     try:
         model = get_model(session.text_model)
 
@@ -179,16 +197,25 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
     save_session(session)
     asyncio.create_task(_update_context_in_background(session_id, req.html, session.text_model))
 
-    # Save individual HTML file for convenience
+    # Save individual HTML and JSON files for convenience
     try:
         from store.sessions import get_project_dir
         slide_filename = f"slide_{n:02d}.html"
         slide_path = get_project_dir() / "slides" / slide_filename
         with open(slide_path, "w", encoding="utf-8") as f:
             f.write(req.html)
-        logger.info(f"[{session_id}] slide {n} HTML saved to {slide_path}")
+        
+        json_filename = f"slide_{n:02d}.json"
+        json_path = get_project_dir() / "slides" / json_filename
+        with open(json_path, "w", encoding="utf-8") as f:
+            try:
+                f.write(slide_data.model_dump_json(indent=2))
+            except AttributeError:
+                f.write(slide_data.json(indent=2))
+
+        logger.info(f"[{session_id}] slide {n} files saved to {slide_path.parent}")
     except Exception as e:
-        logger.error(f"[{session_id}] failed to save slide {n} HTML file: {e}")
+        logger.error(f"[{session_id}] failed to save slide {n} files: {e}")
 
     logger.info(
         f"[{session_id}] slide {n} approved. "

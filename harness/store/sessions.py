@@ -7,7 +7,7 @@ def get_project_dir() -> Path:
     return Path(os.getenv("VAPOR_PROJECT_DIR", "."))
 
 def get_session_path() -> Path:
-    return get_project_dir() / "vapor_project.json"
+    return get_project_dir() / "vapor_deck.json"
 
 # In-memory cache
 sessions: dict[str, DeckSession] = {}

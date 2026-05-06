@@ -19,6 +19,8 @@ class SlideData(BaseModel):
     html: str
     snapshot_b64: str | None = None
     approved: bool = False
+    status: str = "draft"  # draft | approved | refining
+    metadata: dict = {}    # stores state, planning, etc.
 
 
 class DeckSession(BaseModel):
