@@ -6,6 +6,8 @@ export const state = {
   outline: [],
   slides: [],
   draftSlides: {},
+  latestSlides: {},
+  promptApplyingSlides: {},
   generatingSlides: {},
   currentIndex: 0,
   currentSlideHtml: '',
