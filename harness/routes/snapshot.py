@@ -1,22 +1,12 @@
 """
-SNAPSHOT ROUTE
-───────────────
+SNAPSHOT ROUTE — FIXED
+───────────────────────
 POST /api/session/{id}/slide/{n}/snapshot
 
-Takes slide HTML, renders it headlessly, runs vision audit,
-and optionally auto-fixes layout issues (once max).
-
-Response:
-{
-  "snapshot_b64": "...",
-  "audit": {
-    "verdict": "good" | "fixable" | "regenerate",
-    "visual_issues": [...],
-    "fix_instructions": "...",
-    ...
-  },
-  "fixed_html": "..." | null  // only if auto-fix was triggered
-}
+Fixes:
+  - validate_and_maybe_fix() called with correct positional args matching service signature
+  - capture_and_audit() called with correct args
+  - Graceful fallback when Playwright unavailable
 """
 import logging
 
@@ -26,8 +16,6 @@ from pydantic import BaseModel
 from ai.router import get_model
 from store.sessions import get_session, save_session
 from models.audit import VisionAuditResult
-from services.snapshot import capture_and_audit, validate_and_maybe_fix
-from prompts.slide import build_slide_prompt, SLIDE_SYSTEM
 
 logger = logging.getLogger("snapshot_route")
 router = APIRouter()
@@ -35,17 +23,14 @@ router = APIRouter()
 
 class SnapshotRequest(BaseModel):
     html: str
-    run_audit: bool = True       # Set False to skip vision audit (faster)
-    auto_fix: bool = True        # Set False to skip auto-fix even if audit fails
+    run_audit: bool = True
+    auto_fix: bool = True
 
 
 @router.post("/session/{session_id}/slide/{n}/snapshot")
 async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
     """
     Render slide N to a screenshot, run vision audit, optionally auto-fix.
-
-    This is called BEFORE showing the slide to the user (hidden validation).
-    The frontend calls this after each slide finishes generating.
     """
     try:
         session = get_session(session_id)
@@ -78,55 +63,56 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
             "snapshot_b64": screenshot_b64,
             "audit": {"verdict": "good", "visual_issues": [], "skipped": True},
             "fixed_html": None,
+            "auto_fixed": False,
         }
 
+    # Full pipeline: capture → audit → maybe auto-fix
+    from services.snapshot import capture_and_audit, validate_and_maybe_fix
+
     if req.auto_fix and slide_spec:
-        # Full pipeline: capture → audit → maybe auto-fix
-        from services.context_synthesis import get_relevant_chunks
+        # Use the full pipeline with auto-fix
+        # validate_and_maybe_fix(html, session, text_model, vision_model, slide_spec)
+        try:
+            final_html, audit_result = await validate_and_maybe_fix(
+                html=req.html,
+                session=session,
+                text_model=text_model,
+                vision_model=vision_model,
+                slide_spec=slide_spec,
+            )
 
-        original_prompt = build_slide_prompt(
-            n=n,
-            total=len(session.outline),
-            title=slide_spec.title,
-            intent=slide_spec.intent,
-            key_points=slide_spec.key_points,
-            layout_hint=slide_spec.layout_hint,
-            theme=session.theme,
-            deck_context=session.deck_context,
-            relevant_chunks=get_relevant_chunks(
-                session,
-                slide_intent=f"{slide_spec.title} {' '.join(slide_spec.key_points)}",
-                max_tokens=1500,
-            ),
-        )
+            screenshot_b64 = audit_result.snapshot_b64 if audit_result else None
 
-        final_html, audit_result = await validate_and_maybe_fix(
-            slide_html=req.html,
-            theme=session.theme,
-            vision_model=vision_model,
-            text_model=text_model,
-            slide_prompt=original_prompt,
-        )
+            # If auto-fix changed the HTML, return it
+            if final_html and final_html.strip() != req.html.strip():
+                fixed_html = final_html
 
-        screenshot_b64 = audit_result.snapshot_b64
+        except Exception as e:
+            logger.warning(f"[{session_id}] validate_and_maybe_fix failed (non-fatal): {e}")
+            # Fall through to audit-only path
+            audit_result = VisionAuditResult(verdict="good", visual_issues=[f"Pipeline error: {e}"])
 
-        # If the HTML changed (auto-fix happened), return it
-        if final_html.strip() != req.html.strip():
-            fixed_html = final_html
+    else:
+        # Audit only, no fix
+        try:
+            screenshot_b64, audit_result = await capture_and_audit(
+                html=req.html,
+                session=session,
+                text_model=text_model,
+                vision_model=vision_model,
+                slide_spec=slide_spec,
+                auto_fix=False,
+            )
+        except Exception as e:
+            logger.warning(f"[{session_id}] capture_and_audit failed (non-fatal): {e}")
+            audit_result = VisionAuditResult(verdict="good", visual_issues=[f"Audit error: {e}"])
 
-        # Store snapshot in session slide data
+    # Store snapshot in session slide data if we got one
+    if screenshot_b64:
         existing_slide = next((s for s in session.slides if s.index == n), None)
         if existing_slide:
             existing_slide.snapshot_b64 = screenshot_b64
             save_session(session)
-
-    else:
-        # Audit only, no fix
-        screenshot_b64, audit_result = await capture_and_audit(
-            slide_html=req.html,
-            theme=session.theme,
-            vision_model=vision_model,
-        )
 
     logger.info(
         f"[{session_id}] slide {n} snapshot: "
@@ -138,4 +124,5 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
         "snapshot_b64": screenshot_b64,
         "audit": audit_result.model_dump() if audit_result else {"verdict": "good"},
         "fixed_html": fixed_html,
+        "auto_fixed": fixed_html is not None,
     }

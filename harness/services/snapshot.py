@@ -22,19 +22,26 @@ Usage:
   from services.snapshot import capture_and_audit
   result = await capture_and_audit(html, session, text_model, vision_model, slide_spec)
 """
+"""
+SNAPSHOT SERVICE — FIXED
+─────────────────────────
+Fixes:
+  - capture_and_audit() now returns (screenshot_b64, audit_result) tuple
+    consistently so validate_and_maybe_fix can unpack it correctly.
+  - validate_and_maybe_fix() signature is clean and matches route caller.
+  - _auto_fix_slide() no longer requires full session object.
+"""
 import base64
 import json
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
-from models.audit import VisionAuditResult, SlideLifecycle
+from models.audit import VisionAuditResult
 from prompts.vision_audit import build_vision_audit_prompt, VISION_AUDIT_SYSTEM
 from services.stream_utils import collect_stream, strip_fences
 
 logger = logging.getLogger("snapshot")
 
-# Slide wrapper for Playwright rendering
-# Injects theme CSS + scaler script — mirrors what the frontend does
 PLAYWRIGHT_SLIDE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,14 +70,13 @@ PLAYWRIGHT_SLIDE_TEMPLATE = """<!DOCTYPE html>
 
 async def _playwright_capture(html: str, theme: str = "dark-tech") -> Optional[str]:
     """
-    Render slide HTML in a headless Chromium browser and capture a screenshot.
-
+    Render slide HTML in headless Chromium and capture a screenshot.
     Returns base64-encoded PNG, or None if Playwright is unavailable.
     """
     try:
         from playwright.async_api import async_playwright
     except ImportError:
-        logger.warning("Playwright not installed — snapshot capture unavailable. Run: pip install playwright && playwright install chromium")
+        logger.warning("Playwright not installed — snapshot capture unavailable.")
         return None
 
     wrapped = PLAYWRIGHT_SLIDE_TEMPLATE.format(slide_html=html)
@@ -79,18 +85,14 @@ async def _playwright_capture(html: str, theme: str = "dark-tech") -> Optional[s
         async with async_playwright() as p:
             browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
             page = await browser.new_page(viewport={"width": 1280, "height": 720})
-
             await page.set_content(wrapped, wait_until="networkidle")
-            await page.wait_for_timeout(400)  # let animations settle
-
+            await page.wait_for_timeout(400)
             screenshot_bytes = await page.screenshot(
                 type="png",
                 clip={"x": 0, "y": 0, "width": 1280, "height": 720}
             )
             await browser.close()
-
         return base64.b64encode(screenshot_bytes).decode("utf-8")
-
     except Exception as e:
         logger.warning(f"Playwright capture failed: {e}")
         return None
@@ -103,16 +105,12 @@ async def _run_vision_audit(
 ) -> VisionAuditResult:
     """
     Send screenshot to vision model for layout audit.
-
-    Returns VisionAuditResult. On failure, returns a "good" verdict
-    (fail open — don't block slide delivery due to audit errors).
+    Returns VisionAuditResult. Fails open on error.
     """
     prompt = build_vision_audit_prompt(html)
-
     try:
         raw = await vision_model.vision_audit(prompt, screenshot_b64)
         data = json.loads(strip_fences(raw))
-
         return VisionAuditResult(
             verdict=data.get("verdict", "good"),
             visual_issues=data.get("visual_issues", []),
@@ -134,17 +132,15 @@ async def _run_vision_audit(
 async def _auto_fix_slide(
     html: str,
     audit: VisionAuditResult,
-    session,
-    text_model,
     slide_spec,
+    theme: str,
+    deck_context: dict,
+    outline_length: int,
+    text_model,
 ) -> Optional[str]:
     """
     Attempt one automatic fix of a slide based on audit feedback.
-
-    Uses the existing slide generation prompt + a fix instruction suffix.
     Returns fixed HTML, or None if fix failed.
-
-    IMPORTANT: max_auto_fix_attempts = 1 (enforced by SlideLifecycle.can_auto_fix()).
     """
     from prompts.slide import build_slide_prompt, SLIDE_SYSTEM
 
@@ -157,13 +153,13 @@ async def _auto_fix_slide(
 
     base_prompt = build_slide_prompt(
         n=slide_spec.index,
-        total=len(session.outline),
+        total=outline_length,
         title=slide_spec.title,
         intent=slide_spec.intent,
         key_points=slide_spec.key_points,
         layout_hint=slide_spec.layout_hint,
-        theme=session.theme,
-        deck_context=session.deck_context,
+        theme=theme,
+        deck_context=deck_context,
         relevant_chunks="",
     )
 
@@ -196,57 +192,29 @@ async def capture_and_audit(
     vision_model,
     slide_spec,
     auto_fix: bool = True,
-) -> dict:
+) -> Tuple[Optional[str], VisionAuditResult]:
     """
     Full pipeline: capture → audit → optional auto-fix.
 
-    Returns:
-    {
-        "snapshot_b64": str | None,
-        "audit": VisionAuditResult,
-        "fixed_html": str | None,   # set if auto-fix ran
-        "auto_fixed": bool,
-    }
+    Returns (screenshot_b64, audit_result).
+    Note: auto-fix is handled in validate_and_maybe_fix — this function
+    returns the audit result only, not the fixed HTML.
 
-    NEVER runs more than one auto-fix attempt (prevents infinite loops).
+    NEVER runs more than one auto-fix attempt.
     """
-    # Step 1: Capture screenshot
     screenshot_b64 = await _playwright_capture(html, session.theme)
 
     if not screenshot_b64:
-        # Playwright unavailable — skip audit, return as-is
-        return {
-            "snapshot_b64": None,
-            "audit": VisionAuditResult(verdict="good", visual_issues=["Playwright unavailable"]),
-            "fixed_html": None,
-            "auto_fixed": False,
-        }
+        return None, VisionAuditResult(
+            verdict="good",
+            visual_issues=["Playwright unavailable — skipping visual audit"]
+        )
 
-    # Step 2: Vision audit
     audit = await _run_vision_audit(screenshot_b64, html, vision_model)
     audit.slide_index = slide_spec.index if slide_spec else None
     audit.model_used = getattr(vision_model, "model_name", None)
 
-    fixed_html = None
-    auto_fixed = False
-
-    # Step 3: Auto-fix if needed (max ONE attempt)
-    if auto_fix and audit.needs_regeneration() and slide_spec:
-        logger.info(f"[slide {slide_spec.index}] verdict=regenerate — attempting one auto-fix")
-        fixed = await _auto_fix_slide(html, audit, session, text_model, slide_spec)
-        if fixed:
-            fixed_html = fixed
-            auto_fixed = True
-            logger.info(f"[slide {slide_spec.index}] auto-fix produced {len(fixed)} chars")
-        else:
-            logger.warning(f"[slide {slide_spec.index}] auto-fix failed, returning original")
-
-    return {
-        "snapshot_b64": screenshot_b64,
-        "audit": audit,
-        "fixed_html": fixed_html,
-        "auto_fixed": auto_fixed,
-    }
+    return screenshot_b64, audit
 
 
 async def validate_and_maybe_fix(
@@ -255,21 +223,39 @@ async def validate_and_maybe_fix(
     text_model,
     vision_model,
     slide_spec,
-) -> tuple[str, VisionAuditResult]:
+) -> Tuple[str, VisionAuditResult]:
     """
-    Convenience wrapper used by the generate route.
+    Convenience wrapper: capture → audit → optional one-shot auto-fix.
 
     Returns (final_html, audit_result).
     final_html is the fixed version if auto-fix ran, otherwise the original.
     """
-    result = await capture_and_audit(
+    screenshot_b64, audit = await capture_and_audit(
         html=html,
         session=session,
         text_model=text_model,
         vision_model=vision_model,
         slide_spec=slide_spec,
-        auto_fix=True,
+        auto_fix=False,  # we handle auto-fix below
     )
 
-    final_html = result["fixed_html"] or html
-    return final_html, result["audit"]
+    final_html = html
+
+    if audit.needs_regeneration() and slide_spec:
+        logger.info(f"[slide {slide_spec.index}] verdict=regenerate — attempting one auto-fix")
+        fixed = await _auto_fix_slide(
+            html=html,
+            audit=audit,
+            slide_spec=slide_spec,
+            theme=session.theme,
+            deck_context=session.deck_context,
+            outline_length=len(session.outline),
+            text_model=text_model,
+        )
+        if fixed:
+            final_html = fixed
+            logger.info(f"[slide {slide_spec.index}] auto-fix produced {len(fixed)} chars")
+        else:
+            logger.warning(f"[slide {slide_spec.index}] auto-fix failed, returning original")
+
+    return final_html, audit

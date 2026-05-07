@@ -32,8 +32,8 @@ class DeckSession(BaseModel):
     mode: str = "plan"  # plan | build
 
     # Model config
-    text_model: str = "google/gemini-2.0-flash"
-    vision_model: str = "google/gemini-2.0-flash"
+    text_model: str = "ollama/gemma4:31b-cloud"
+    vision_model: str = "ollama/gemma4:31b-cloud"
     theme: str = "dark-tech"
 
     # ── Input layer ────────────────────────────────────────────────────────────

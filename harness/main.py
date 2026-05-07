@@ -47,7 +47,7 @@ def health():
     return {
         "status": "ok",
         "version": "0.2.0",
-        "providers": ["google", "ollama"],
+        "providers": ["ollama"],
         "features": [
             "sse_streaming",
             "per_slide_lifecycle",
@@ -90,17 +90,17 @@ def list_models():
     """List available model strings for the frontend model picker."""
     return {
         "text_models": [
-            {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
-            {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
-            {"id": "google/gemma-4", "label": "Gemma 4 (Google)", "provider": "google"},
-            {"id": "ollama/gemma4:31b-cloud", "label": "Gemma 4 31B (local)", "provider": "ollama"},
+            # {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
+            # {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
+            # {"id": "google/gemma-4", "label": "Gemma 4 (Google)", "provider": "google"},
+            {"id": "ollama/gemma4:31b-cloud", "label": "Gemma 4 31B (cloud)", "provider": "ollama"},
             {"id": "ollama/llama3.1:8b", "label": "Llama 3.1 8B (local)", "provider": "ollama"},
             {"id": "ollama/mistral", "label": "Mistral 7B (local)", "provider": "ollama"},
         ],
         "vision_models": [
-            {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
-            {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
-            {"id": "ollama/llava:13b", "label": "LLaVA 13B (local)", "provider": "ollama"},
+            # {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
+            # {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
+            {"id": "ollama/gemma4:31b-cloud", "label": "Gemma 4 31B (cloud)", "provider": "ollama"},
         ],
     }
 
