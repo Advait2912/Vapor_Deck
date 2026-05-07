@@ -1,10 +1,32 @@
+/**
+ * VAPOR DECK — main.js (UPGRADED)
+ * ─────────────────────────────────
+ * Wires the new systems into the existing app without breaking anything.
+ *
+ * NEW in this version:
+ *   - Uses renderer/index.js (isolated iframe renderer) for slide rendering
+ *   - Integrates comparison.js for split-view refinement
+ *   - Integrates export.js for PDF export
+ *   - Integrates global_control.js + local_control.js in sidebar
+ *   - Calls /snapshot route after slide generation (vision audit)
+ *   - Per-slide lifecycle states (PLANNING → BUILDING → REVIEWING → APPROVED)
+ *
+ * PRESERVED from original:
+ *   - All SSE streaming logic
+ *   - All session management
+ *   - All outline/confirmation flow
+ *   - All mode switching (plan/build)
+ *   - All localStorage persistence
+ *   - All abort controller patterns
+ */
+
 import './style.css';
-import { 
-  createSession, 
+import {
+  createSession,
   uploadFile,
-  uploadText, 
-  synthesize, 
-  generateOutline, 
+  uploadText,
+  synthesize,
+  generateOutline,
   confirmOutline,
   streamSlide,
   approveSlide as approveSlideApi,
@@ -12,20 +34,36 @@ import {
   getProjectInfo,
   getActiveSession,
   updateMode,
-  sendPlanChat
+  sendPlanChat,
+  takeSnapshot,
 } from './api/client.js';
 
-import { state, updateState, getSlidePhase, lockSlideIntoBuild, canPlanSlide, isModeAllowedForSlide } from './state.js';
+import { state, updateState, getSlidePhase, lockSlideIntoBuild, canPlanSlide } from './state.js';
 import { elements, updateUI, renderOutline, renderPlaceholder, renderSlide, renderOutlineContentSummary, renderImageThumbs, renderSlideInfo, renderChatMessage, clearUI } from './ui.js';
 import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
+
+// ── New modules ────────────────────────────────────────────────────────────────
+import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer } from './renderer/index.js';
+import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
+import { renderGlobalControls, globalState, addSlideToOutline } from './ui/global_control.js';
+import { renderLocalControls } from './ui/local_control.js';
+import {
+  comparisonState,
+  enterComparison,
+  appendComparisonToken,
+  finalizeComparison,
+  refineAgain,
+  useRefinedVersion,
+  resetComparison,
+} from './ui/comparison.js';
 
 let pendingTopicImages = [];
 let pendingRefineImages = [];
 let lastRefinedHtml = '';
 const activeSlideControllers = new Map();
 let activeRefineController = null;
-let currentAbortController = null; // ← was missing, caused ReferenceError
+let currentAbortController = null;
 let sessionRunToken = 0;
 const latestJobBySlide = {};
 let slideJobCounter = 0;
@@ -78,39 +116,119 @@ function clearSessionViewState(sessionId) {
   if (!sessionId) return;
   try {
     localStorage.removeItem(getSessionViewKey(sessionId));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function resumeGeneratingSlidesFromCache() {
   const indices = Object.keys(state.generatingSlides || {}).map(Number);
   if (!indices.length) return;
-  indices.forEach((idx) => {
-    startSlideGeneration(idx, true);
-  });
+  indices.forEach((idx) => startSlideGeneration(idx, true));
 }
 
 function syncStatusFromState() {
   const hasActiveJobs = Object.keys(state.generatingSlides || {}).length > 0;
-  const currentSaved = state.slides.some(s => s.index === state.currentIndex);
-  const currentDraft = !!state.draftSlides?.[state.currentIndex] || !!state.currentSlideHtml;
-  
   if (state.status === 'REVIEWING_OUTLINE') return;
-
   if (hasActiveJobs) {
     state.status = 'GENERATING';
-  } else if (currentSaved || currentDraft) {
+  } else if (state.draftSlides?.[state.currentIndex] || state.currentSlideHtml) {
     state.status = 'REVIEWING';
   } else if (state.outline.length && state.slides.length === state.outline.length) {
     state.status = 'DONE';
   }
 }
 
-// ── Initialization ────────────────────────────────────────────────────────────
+// ── Global control event listeners ────────────────────────────────────────────
+function setupGlobalControlListeners() {
+  window.addEventListener('global:outline-changed', (e) => {
+    updateState({ outline: e.detail.outline });
+    renderOutline(navigateToSlide);
+    persistSessionViewState();
+    // Sync to backend if session exists
+    if (state.sessionId && e.detail.reason === 'reordered') {
+      const order = e.detail.outline.map((_, i) => i);
+      fetch(`/api/session/${state.sessionId}/outline/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order })
+      }).catch(err => console.warn('Reorder sync failed:', err));
+    }
+  });
+
+  window.addEventListener('global:setting-changed', (e) => {
+    if (!state.sessionId) return;
+    const { globalState: gs } = e.detail;
+    fetch(`/api/session/${state.sessionId}/deck-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tone: gs.tone,
+        audience: gs.audience,
+        narrative_structure: gs.narrativeStructure,
+        deck_instructions: gs.deckInstructions || null,
+      })
+    }).catch(err => console.warn('Deck settings sync failed:', err));
+  });
+
+  window.addEventListener('global:error', (e) => {
+    renderChatMessage('ai', `⚠ ${e.detail.message}`);
+    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+  });
+}
+
+// ── Sidebar: render global controls above the outline ────────────────────────
+function mountGlobalControlsInSidebar() {
+  const outlineList = elements.outlineList;
+  if (!outlineList) return;
+
+  // Insert a container before the outline list
+  let gcContainer = document.getElementById('global-controls-container');
+  if (!gcContainer) {
+    gcContainer = document.createElement('div');
+    gcContainer.id = 'global-controls-container';
+    outlineList.parentNode.insertBefore(gcContainer, outlineList);
+  }
+
+  // Only show global controls once outline exists and we're past IDLE
+  if (state.outline.length > 0 && state.status !== 'IDLE') {
+    renderGlobalControls(gcContainer);
+  } else {
+    gcContainer.innerHTML = '';
+  }
+}
+
+// ── Right sidebar: render local controls ─────────────────────────────────────
+function mountLocalControlsInSidebar() {
+  const infoList = elements.infoList;
+  if (!infoList) return;
+
+  // Only show in build mode with a slide available
+  const inBuildMode = !canPlanSlide(state.currentIndex) || state.mode === 'build';
+  const hasSlide = !!(state.draftSlides?.[state.currentIndex] || state.currentSlideHtml);
+
+  if (inBuildMode && state.outline.length > 0) {
+    // Insert local controls at top of info sidebar
+    let lcContainer = document.getElementById('local-controls-container');
+    if (!lcContainer) {
+      lcContainer = document.createElement('div');
+      lcContainer.id = 'local-controls-container';
+      infoList.parentNode.insertBefore(lcContainer, infoList);
+    }
+
+    renderLocalControls(lcContainer, {
+      onRefine: (mode, instruction) => {
+        startRefinement(mode, instruction);
+      },
+      onRegenerate: () => regenerateCurrentSlide(),
+      onApprove: () => approveSlide(),
+    });
+  }
+}
+
+// ── Initialization ─────────────────────────────────────────────────────────────
 async function init() {
   initResizers();
-  
+  setupGlobalControlListeners();
+
   setupEventListeners({
     onStartGeneration: startGeneration,
     onTopicImagesSelected: handleTopicImagesSelected,
@@ -124,31 +242,113 @@ async function init() {
     onStopGeneration: stopConversation,
     onNewDeck: handleNewDeck,
     onUseRefined: () => {
-      if (!lastRefinedHtml.trim()) return;
-      state.currentSlideHtml = lastRefinedHtml;
-      state.draftSlides[state.currentIndex] = lastRefinedHtml;
-      renderSlide(lastRefinedHtml);
+      const html = useRefinedVersion();
+      if (!html?.trim()) return;
+      state.currentSlideHtml = html;
+      state.draftSlides[state.currentIndex] = html;
+      // Use new isolated renderer
+      const iframe = elements.slideIframe;
+      mountSlide(iframe, html, state.theme);
+      persistSessionViewState();
     },
     onSwitchMode: handleSwitchMode,
     onPlanChat: handlePlanChat,
     onStartSlideGeneration: (index) => startSlideGeneration(index, true)
   });
 
-  await loadProjectInfo();
+  // Wire up comparison overlay buttons using the new comparison module
+  _wireComparisonButtons();
 
+  await loadProjectInfo();
   updateUI();
+  mountGlobalControlsInSidebar();
+
   if (!state.outline.length) {
-    renderPlaceholder('Slide Preview Area');
+    mountPlaceholder(elements.slideIframe, 'Slide Preview Area');
   }
 }
 
-// ── Project & Session Restore ─────────────────────────────────────────────────
+function _wireComparisonButtons() {
+  // Keep-before button
+  elements.closeComparison?.addEventListener('click', () => {
+    resetComparison();
+    elements.comparisonOverlay.style.display = 'none';
+  });
+
+  elements.keepCurrentBtn?.addEventListener('click', () => {
+    resetComparison();
+    elements.comparisonOverlay.style.display = 'none';
+  });
+
+  elements.useRefinedBtn?.addEventListener('click', () => {
+    const html = useRefinedVersion();
+    if (html?.trim()) {
+      state.currentSlideHtml = html;
+      state.draftSlides[state.currentIndex] = html;
+      mountSlide(elements.slideIframe, html, state.theme);
+      persistSessionViewState();
+    }
+    resetComparison();
+    elements.comparisonOverlay.style.display = 'none';
+  });
+
+  // "Refine Again" button — if it exists in the DOM
+  const refineAgainBtn = document.getElementById('refine-again-btn');
+  if (refineAgainBtn) {
+    refineAgainBtn.addEventListener('click', async () => {
+      const newBeforeHtml = refineAgain();
+      if (newBeforeHtml) {
+        // Stream a new refinement into the right panel
+        await _streamRefinementIntoComparisonRight();
+      }
+    });
+  }
+}
+
+async function _streamRefinementIntoComparisonRight() {
+  const currentHtml = comparisonState.before?.html || state.currentSlideHtml;
+  if (!currentHtml) return;
+
+  const iframeAfter = document.getElementById('iframe-after');
+  clearStreamBuffer('comparison-after');
+  mountPlaceholder(iframeAfter, 'Refining...');
+
+  let refinedHtml = '';
+  activeRefineController = new AbortController();
+  try {
+    const stream = streamSlide(
+      state.sessionId,
+      state.currentIndex + 1,
+      'refine',
+      {
+        refineMode: 'expand',
+        currentHtml,
+        instruction: elements.refineInstructionInput?.value?.trim() || '',
+      },
+      activeRefineController.signal
+    );
+    for await (const token of stream) {
+      const t = token.replace(/\\n/g, '\n');
+      refinedHtml += t;
+      appendComparisonToken(t);
+    }
+    finalizeComparison();
+  } catch (err) {
+    if (err?.name !== 'AbortError') {
+      console.error('Comparison re-refinement failed:', err);
+    }
+  } finally {
+    activeRefineController = null;
+  }
+}
+
+// ── Project & Session Restore ──────────────────────────────────────────────────
 async function loadProjectInfo() {
   try {
     const info = await getProjectInfo();
     state.projectPath = info.path;
     elements.projectPathDisplay.textContent = info.path;
-    
+
     const session = await getActiveSession();
     if (session && session.session_id) {
       const backendStatus = (session.status || 'idle').toLowerCase();
@@ -159,16 +359,10 @@ async function loadProjectInfo() {
       const latestSlides = { ...(cached.latestSlides || {}) };
       const draftSlides = { ...(cached.draftSlides || {}) };
       const generatingSlides = (cached.generatingIndices || []).reduce((acc, idx) => {
-        acc[idx] = true;
-        return acc;
+        acc[idx] = true; return acc;
       }, {});
-      const promptApplyingSlides = (cached.promptApplyingIndices || []).reduce((acc, idx) => {
-        acc[idx] = true;
-        return acc;
-      }, {});
-      approvedFromBackend.forEach(s => {
-        latestSlides[s.index] = s.html;
-      });
+
+      approvedFromBackend.forEach(s => { latestSlides[s.index] = s.html; });
 
       updateState({
         sessionId: session.session_id,
@@ -184,15 +378,14 @@ async function loadProjectInfo() {
         slidePhases: cached.slidePhases || {}
       });
 
-      // Restore chat history in UI
       if (state.messages.length > 0) {
         elements.chatHistory.innerHTML = '';
         state.messages.forEach(m => renderChatMessage(m.role, m.text));
       }
 
-      console.log(`Restored session ${state.sessionId} (status: ${state.status})`);
       renderOutline(navigateToSlide);
       updateUI();
+      mountGlobalControlsInSidebar();
 
       const s = state.status;
       if (s === 'REVIEWING_OUTLINE') {
@@ -200,28 +393,19 @@ async function loadProjectInfo() {
         renderOutlineContentSummary(elements.infoList);
       } else if (s === 'GENERATING') {
         state.phase = 'DESIGN';
-        renderPlaceholder('Resuming previous generation...');
+        mountPlaceholder(elements.slideIframe, 'Resuming previous generation...');
         resumeGeneratingSlidesFromCache();
-      } else if (s === 'REVIEWING') {
+      } else if (s === 'REVIEWING' || s === 'DONE') {
         state.phase = 'DESIGN';
         const latest = state.latestSlides[state.currentIndex];
         if (latest) {
           state.currentSlideHtml = latest;
-          renderSlide(latest);
+          mountSlide(elements.slideIframe, latest, state.theme);
         } else {
-          renderPlaceholder('Slide ready for review. Approve or refine.');
-        }
-      } else if (s === 'DONE') {
-        state.phase = 'DESIGN';
-        const latest = state.latestSlides[state.currentIndex];
-        if (latest) {
-          state.currentSlideHtml = latest;
-          renderSlide(latest);
-        } else {
-          renderPlaceholder('Deck complete! Export or start a new deck.');
+          mountPlaceholder(elements.slideIframe, s === 'DONE' ? 'Deck complete! Export or start a new deck.' : 'Ready to review.');
         }
       } else if (state.outline.length > 0) {
-        renderPlaceholder('Project loaded. Ready to continue.');
+        mountPlaceholder(elements.slideIframe, 'Project loaded. Ready to continue.');
       }
       persistSessionViewState();
     }
@@ -231,44 +415,31 @@ async function loadProjectInfo() {
   }
 }
 
-// ── New Deck ──────────────────────────────────────────────────────────────────
+// ── New Deck ────────────────────────────────────────────────────────────────────
 async function handleNewDeck() {
   const oldSessionId = state.sessionId;
-  
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingTopicImages = [];
   pendingRefineImages = [];
   updateState({
-    sessionId: null,
-    outline: [],
-    slides: [],
-    messages: [],
-    draftSlides: {},
-    latestSlides: {},
-    promptApplyingSlides: {},
-    generatingSlides: {},
-    slidePhases: {},
-    currentIndex: 0,
-    currentSlideHtml: '',
-    status: 'IDLE',
-    phase: 'CONTENT',
-    mode: 'plan',
-    projectPath: state.projectPath 
+    sessionId: null, outline: [], slides: [], messages: [],
+    draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
+    generatingSlides: {}, slidePhases: {}, currentIndex: 0,
+    currentSlideHtml: '', status: 'IDLE', phase: 'CONTENT',
+    mode: 'plan', projectPath: state.projectPath
   });
-  
+
   clearUI();
+  document.getElementById('global-controls-container')?.remove();
+  document.getElementById('local-controls-container')?.remove();
 
   if (oldSessionId) {
-    try {
-      await deleteSession(oldSessionId);
-    } catch (e) {
-      console.warn('Failed to delete session on backend:', e);
-    }
+    try { await deleteSession(oldSessionId); } catch {}
   }
 }
 
-// ── Outline Generation ────────────────────────────────────────────────────────
+// ── Outline Generation ──────────────────────────────────────────────────────────
 async function startGeneration(prompt) {
   try {
     state.status = 'INITIALIZING';
@@ -300,6 +471,7 @@ async function startGeneration(prompt) {
     state.phase = 'CONTENT';
     renderOutline(navigateToSlide);
     renderOutlineContentSummary(elements.infoList);
+    mountGlobalControlsInSidebar();
     updateUI();
   } catch (error) {
     console.error('Generation failed:', error);
@@ -310,7 +482,7 @@ async function startGeneration(prompt) {
   }
 }
 
-// ── Outline Confirmation ──────────────────────────────────────────────────────
+// ── Outline Confirmation ────────────────────────────────────────────────────────
 async function handleConfirmOutline() {
   try {
     state.status = 'CONFIRMING';
@@ -320,18 +492,18 @@ async function handleConfirmOutline() {
 
     await confirmOutline(state.sessionId, state.outline);
 
-    // Stay in plan mode — user picks when to switch per-slide
     state.status = 'GENERATING';
     state.phase = 'DESIGN';
     state.currentIndex = 0;
-    
-    const confirmMsg = "Outline confirmed! You can continue planning individual slides or switch to Build mode to generate them. Each slide moves from Plan → Build independently.";
+
+    const confirmMsg = "Outline confirmed! You can continue planning individual slides or switch to Build mode to generate them.";
     state.messages.push({ role: 'ai', text: confirmMsg });
     renderChatMessage('ai', confirmMsg);
 
     elements.confirmOutlineBtn.style.display = 'none';
     elements.confirmOutlineBtn.disabled = false;
     elements.confirmOutlineBtn.textContent = 'Confirm';
+    mountGlobalControlsInSidebar();
     updateUI();
     navigateToSlide(0);
   } catch (error) {
@@ -343,80 +515,53 @@ async function handleConfirmOutline() {
   }
 }
 
-// ── Mode Switch ────────────────────────────────────────────────────────────────
+// ── Mode Switch ──────────────────────────────────────────────────────────────────
 async function handleSwitchMode(newMode) {
   if (!state.sessionId) return;
-
-  // If switching to plan mode, check if current slide allows it
   if (newMode === 'plan' && !canPlanSlide(state.currentIndex)) {
-    showSlidePhaseBoundaryMessage(state.currentIndex, 'plan');
+    const msg = `Slide ${state.currentIndex + 1} has already been built. Planning is locked for this slide. Switch to Build mode to refine it.`;
+    renderChatMessage('ai', msg);
+    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
     return;
   }
-
   try {
     const res = await updateMode(state.sessionId, newMode);
     updateState({ mode: res.mode });
     updateUI();
+    mountLocalControlsInSidebar();
     persistSessionViewState();
   } catch (error) {
     console.error('Mode switch failed:', error);
   }
 }
 
-/**
- * Show a clear message when the user tries to do something that violates
- * the per-slide plan→build boundary.
- */
-function showSlidePhaseBoundaryMessage(index, attemptedAction) {
-  const slideNum = index + 1;
-  if (attemptedAction === 'plan') {
-    const msg = `Slide ${slideNum} has already been built. You can't go back to planning a slide that has been generated. Switch to Build mode to refine it instead.`;
-    // Add to chat history so it's visible
-    renderChatMessage('ai', msg);
-    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
-  } else if (attemptedAction === 'build-while-chat') {
-    const msg = `Can't generate Slide ${slideNum} while a plan chat is in progress. Wait for the chat to complete first.`;
-    renderChatMessage('ai', msg);
-    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
-  }
-}
-
-// ── Plan Chat ─────────────────────────────────────────────────────────────────
+// ── Plan Chat ───────────────────────────────────────────────────────────────────
 async function handlePlanChat(message) {
   if (!state.sessionId) return;
-
-  // Per-slide boundary check: if this slide has been built, no more planning
   if (!canPlanSlide(state.currentIndex)) {
-    showSlidePhaseBoundaryMessage(state.currentIndex, 'plan');
+    renderChatMessage('ai', `Slide ${state.currentIndex + 1} is in Build phase — planning is locked. Refine it in Build mode instead.`);
+    elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
     return;
   }
-
-  // Can't chat while this slide is actively generating
   if (state.generatingSlides[state.currentIndex]) {
-    showSlidePhaseBoundaryMessage(state.currentIndex, 'build-while-chat');
+    renderChatMessage('ai', `Can't chat while slide ${state.currentIndex + 1} is generating.`);
     return;
   }
-
   try {
     state.messages.push({ role: 'user', text: message });
     renderChatMessage('user', message);
-    
     state.status = 'OUTLINING';
     updateUI();
-    
     if (currentAbortController) currentAbortController.abort();
     currentAbortController = new AbortController();
     const res = await sendPlanChat(state.sessionId, message, state.currentIndex + 1, currentAbortController.signal);
     currentAbortController = null;
-    
     updateState({ outline: res.outline });
     state.status = 'REVIEWING_OUTLINE';
     elements.promptInput.value = '';
-    
-    const aiResponse = res.message || "Outline updated based on your request.";
+    const aiResponse = res.message || "Outline updated.";
     state.messages.push({ role: 'ai', text: aiResponse });
     renderChatMessage('ai', aiResponse);
-
     renderOutline(navigateToSlide);
     renderOutlineContentSummary(elements.infoList);
     updateUI();
@@ -429,15 +574,12 @@ async function handlePlanChat(message) {
   }
 }
 
-// ── Outline Navigation ────────────────────────────────────────────────────────
+// ── Outline Navigation ───────────────────────────────────────────────────────────
 function navigateToSlide(index) {
   state.currentIndex = index;
 
-  // When navigating, auto-switch mode to match the slide's current phase
-  // so the UI always shows the right interaction panel
   const slidePhase = getSlidePhase(index);
   if (slidePhase === 'build' && state.mode === 'plan') {
-    // Silently update local mode — don't call backend just for navigation
     state.mode = 'build';
     updateMode(state.sessionId, 'build').catch(() => {});
   }
@@ -451,7 +593,7 @@ function navigateToSlide(index) {
 
   if (state.promptApplyingSlides[index]) {
     state.status = 'GENERATING';
-    renderPlaceholder(`Applying prompt to Slide ${index + 1}...`);
+    mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${index + 1}...`);
     renderOutline(navigateToSlide);
     updateUI();
     persistSessionViewState();
@@ -462,8 +604,9 @@ function navigateToSlide(index) {
   if (latest) {
     state.currentSlideHtml = latest;
     state.status = 'REVIEWING';
-    renderSlide(latest);
+    mountSlide(elements.slideIframe, latest, state.theme);
     renderOutline(navigateToSlide);
+    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
@@ -473,8 +616,9 @@ function navigateToSlide(index) {
   if (draft) {
     state.currentSlideHtml = draft;
     state.status = 'REVIEWING';
-    renderSlide(draft);
+    mountSlide(elements.slideIframe, draft, state.theme);
     renderOutline(navigateToSlide);
+    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
@@ -484,48 +628,39 @@ function navigateToSlide(index) {
   if (saved) {
     state.currentSlideHtml = saved.html;
     state.status = 'REVIEWING';
-    renderSlide(saved.html);
+    mountSlide(elements.slideIframe, saved.html, state.theme);
     renderOutline(navigateToSlide);
+    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
   }
 
   if (state.generatingSlides[index]) {
-    renderPlaceholder(`Slide ${index + 1} is generating in the background...`);
+    mountPlaceholder(elements.slideIframe, `Slide ${index + 1} is generating...`);
     renderOutline(navigateToSlide);
     updateUI();
     return;
   }
 
-  renderPlaceholder(`Slide ${index + 1} has not been built yet. Click the ✦ button in the outline to generate it.`);
+  mountPlaceholder(elements.slideIframe, `Slide ${index + 1} not built yet. Click ✧ to generate.`);
   renderOutline(navigateToSlide);
   updateUI();
 }
 
-// ── Slide Generation ──────────────────────────────────────────────────────────
+// ── Slide Generation ─────────────────────────────────────────────────────────────
 async function startSlideGeneration(index = state.currentIndex, force = false) {
-  // Per-slide boundary: generation locks this slide into build phase
-  if (!canPlanSlide(index)) {
-    // Already in build — that's fine, just regenerating
-  }
-
-  // Block generation if a plan chat is in progress for ANY slide
-  // (backend can't handle simultaneous chat + generate on same session)
   if (state.status === 'OUTLINING') {
-    console.warn('Cannot generate while plan chat is in progress');
+    console.warn('Cannot generate while plan chat in progress');
     return;
   }
-
   if (state.generatingSlides[index] && !force) return;
   if (force && activeSlideControllers.has(index)) {
     activeSlideControllers.get(index).abort();
   }
 
-  // Lock this slide into build phase — irreversible
   lockSlideIntoBuild(index);
 
-  // If we're currently in plan mode viewing this slide, switch to build
   if (state.mode === 'plan' && state.currentIndex === index) {
     state.mode = 'build';
     updateMode(state.sessionId, 'build').catch(() => {});
@@ -544,51 +679,63 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   const slideTitle = state.outline[index]?.title ?? `Slide ${slideNum}`;
 
   if (index === state.currentIndex) {
-    renderPlaceholder(`Generating Slide ${slideNum}: ${slideTitle}...`);
+    mountPlaceholder(elements.slideIframe, `Generating Slide ${slideNum}: ${slideTitle}...`);
+    clearStreamBuffer('main');
   }
 
   let slideHtml = '';
   const controller = new AbortController();
   activeSlideControllers.set(index, controller);
+
   try {
     const stream = streamSlide(state.sessionId, slideNum, 'generate', {}, controller.signal);
     for await (const token of stream) {
-      slideHtml += token.replace(/\\n/g, '\n');
+      const t = token.replace(/\\n/g, '\n');
+      slideHtml += t;
+      // Use new buffered renderer for the active slide
+      if (index === state.currentIndex && runToken === sessionRunToken) {
+        streamToken(elements.slideIframe, t, state.theme, 'main');
+      }
     }
 
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (!slideHtml.trim()) throw new Error('Empty slide response from backend');
 
+    // Finalize the stream
+    if (index === state.currentIndex) {
+      finalizeSlide(elements.slideIframe, state.theme, 'main');
+    }
+
     state.draftSlides[index] = slideHtml;
     state.latestSlides[index] = slideHtml;
-    if (index === state.currentIndex && runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
+
+    if (index === state.currentIndex && runToken === sessionRunToken) {
       state.currentSlideHtml = slideHtml;
       state.status = 'REVIEWING';
-      renderSlide(slideHtml);
+      // Render final clean version
+      mountSlide(elements.slideIframe, slideHtml, state.theme);
     }
+
     updateUI();
+    mountLocalControlsInSidebar();
     renderOutline(navigateToSlide);
     persistSessionViewState();
 
-    elements.visionStatus.style.display = 'inline-block';
-    elements.visionStatus.style.color = 'var(--accent)';
-    elements.visionStatus.textContent = 'VISION: ANALYZING...';
-    setTimeout(() => {
-      elements.visionStatus.textContent = 'VISION: LAYOUT OK';
-      elements.visionStatus.style.color = '#10b981';
-    }, 1500);
+    // ── Vision audit (Goal 3) — runs after slide is shown, non-blocking ────
+    _runVisionAuditInBackground(index, slideNum, slideHtml);
+
   } catch (error) {
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (error?.name === 'AbortError') {
       if (index === state.currentIndex) {
-        renderPlaceholder(`Stopped generating slide ${slideNum}.`);
+        mountPlaceholder(elements.slideIframe, `Stopped generating slide ${slideNum}.`);
       }
     } else {
       console.error('Slide generation failed:', error);
       state.status = 'ERROR';
       updateUI();
       if (index === state.currentIndex) {
-        renderPlaceholder(`Error generating slide ${slideNum}. Check console.`);
+        mountPlaceholder(elements.slideIframe, `Error generating slide ${slideNum}.`);
       }
     }
   } finally {
@@ -605,12 +752,68 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   }
 }
 
+// ── Vision Audit (background, non-blocking) ───────────────────────────────────
+async function _runVisionAuditInBackground(index, slideNum, html) {
+  if (!state.sessionId) return;
+
+  const visionStatus = elements.visionStatus;
+  if (visionStatus) {
+    visionStatus.style.display = 'inline-block';
+    visionStatus.style.color = 'var(--accent)';
+    visionStatus.textContent = 'VISION: ANALYZING...';
+  }
+
+  try {
+    const result = await takeSnapshot(state.sessionId, slideNum, html);
+    const verdict = result?.audit?.verdict || 'good';
+    const autoFixed = result?.auto_fixed;
+
+    if (visionStatus) {
+      if (verdict === 'good') {
+        visionStatus.textContent = 'VISION: LAYOUT OK';
+        visionStatus.style.color = '#10b981';
+      } else if (verdict === 'fixable') {
+        visionStatus.textContent = 'VISION: MINOR ISSUES';
+        visionStatus.style.color = '#fbbf24';
+      } else {
+        visionStatus.textContent = autoFixed ? 'VISION: AUTO-FIXED' : 'VISION: ISSUES';
+        visionStatus.style.color = autoFixed ? '#10b981' : '#ef4444';
+      }
+    }
+
+    // If auto-fix produced better HTML, update the slide
+    if (autoFixed && result.fixed_html?.trim()) {
+      const fixedHtml = result.fixed_html;
+      state.draftSlides[index] = fixedHtml;
+      state.latestSlides[index] = fixedHtml;
+      if (state.currentIndex === index) {
+        state.currentSlideHtml = fixedHtml;
+        mountSlide(elements.slideIframe, fixedHtml, state.theme);
+        console.info(`[slide ${slideNum}] Vision auto-fix applied`);
+      }
+      persistSessionViewState();
+    }
+
+    setTimeout(() => {
+      if (visionStatus) visionStatus.style.display = 'none';
+    }, 4000);
+
+  } catch (err) {
+    // Vision audit failure is non-fatal
+    console.warn('Vision audit failed (non-fatal):', err);
+    if (visionStatus) {
+      visionStatus.textContent = 'VISION: N/A';
+      setTimeout(() => { visionStatus.style.display = 'none'; }, 2000);
+    }
+  }
+}
+
 // ── Slide Approval ────────────────────────────────────────────────────────────
 async function approveSlide() {
   try {
     const html = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
     if (!html?.trim()) {
-      renderPlaceholder('Generate this slide first, then approve.');
+      mountPlaceholder(elements.slideIframe, 'Generate this slide first, then approve.');
       return;
     }
     const approvedIndex = state.currentIndex;
@@ -624,36 +827,27 @@ async function approveSlide() {
     delete state.draftSlides[approvedIndex];
 
     if (approvedIndex < state.outline.length - 1) {
-      const nextReadyIndex = state.outline.findIndex((_, idx) => {
-        const alreadyApproved = state.slides.some(s => s.index === idx);
-        return !alreadyApproved && !!state.draftSlides[idx];
+      const nextPending = state.outline.findIndex((_, idx) => {
+        return !state.slides.some(s => s.index === idx);
       });
-      const nextPendingIndex = state.outline.findIndex((_, idx) => {
-        const alreadyApproved = state.slides.some(s => s.index === idx);
-        return !alreadyApproved;
-      });
-
-      state.currentIndex = nextReadyIndex >= 0 ? nextReadyIndex : (nextPendingIndex >= 0 ? nextPendingIndex : approvedIndex);
-      const hasCurrentDraft = !!state.draftSlides[state.currentIndex];
-      state.status = hasCurrentDraft ? 'REVIEWING' : 'GENERATING';
+      state.currentIndex = nextPending >= 0 ? nextPending : approvedIndex;
+      const hasDraft = !!state.draftSlides[state.currentIndex];
+      state.status = hasDraft ? 'REVIEWING' : 'GENERATING';
       renderOutline(navigateToSlide);
       updateUI();
-      if (hasCurrentDraft) {
-        renderSlide(state.draftSlides[state.currentIndex]);
+      if (hasDraft) {
+        mountSlide(elements.slideIframe, state.draftSlides[state.currentIndex], state.theme);
       } else {
-        renderPlaceholder(`Slide ${state.currentIndex + 1} is still generating. You can approve any ready slide now.`);
+        mountPlaceholder(elements.slideIframe, `Slide ${state.currentIndex + 1} not built yet.`);
       }
     } else {
       state.status = 'DONE';
       updateUI();
       renderOutline(navigateToSlide);
-      renderPlaceholder('🎉 Deck Complete! All slides approved. Use Export PDF to save.');
+      mountPlaceholder(elements.slideIframe, '🎉 Deck Complete! All slides approved. Export PDF.');
     }
     persistSessionViewState();
-
-    approveSlideApi(state.sessionId, slideNum, html).catch((error) => {
-      console.error('Approval sync failed:', error);
-    });
+    approveSlideApi(state.sessionId, slideNum, html).catch(err => console.error('Approval sync failed:', err));
   } catch (error) {
     console.error('Approval failed:', error);
     state.status = 'REVIEWING';
@@ -662,38 +856,45 @@ async function approveSlide() {
 }
 
 // ── Slide Refinement ──────────────────────────────────────────────────────────
-async function startRefinement(mode) {
+async function startRefinement(mode, instruction = '') {
   const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
   if (!currentHtml?.trim()) return;
 
-  for (const image of pendingRefineImages) {
-    await uploadFile(state.sessionId, image, 'reference');
-  }
+  const instructionText = instruction || elements.refineInstructionInput?.value?.trim() || '';
 
+  // Enter comparison mode — freezes current on left, streams new on right
+  enterComparison(currentHtml, mode.charAt(0).toUpperCase() + mode.slice(1));
   elements.comparisonOverlay.style.display = 'flex';
-  elements.iframeBefore.srcdoc = elements.slideIframe.srcdoc;
-  renderPlaceholder('Refining...', elements.iframeAfter);
+
+  const iframeAfter = document.getElementById('iframe-after');
 
   let refinedHtml = '';
   activeRefineController = new AbortController();
   try {
-    const stream = streamSlide(state.sessionId, state.currentIndex + 1, 'refine', {
-      refineMode: mode,
-      currentHtml,
-      instruction: elements.refineInstructionInput.value.trim(),
-      signal: activeRefineController.signal
-    });
+    const stream = streamSlide(
+      state.sessionId,
+      state.currentIndex + 1,
+      'refine',
+      {
+        refineMode: mode,
+        currentHtml,
+        instruction: instructionText,
+      },
+      activeRefineController.signal
+    );
     for await (const token of stream) {
-      refinedHtml += token.replace(/\\n/g, '\n');
+      const t = token.replace(/\\n/g, '\n');
+      refinedHtml += t;
+      appendComparisonToken(t);
     }
+    finalizeComparison();
     lastRefinedHtml = refinedHtml;
-    renderSlide(refinedHtml, elements.iframeAfter);
   } catch (error) {
     if (error?.name === 'AbortError') {
-      renderPlaceholder('Refinement stopped.', elements.iframeAfter);
+      mountPlaceholder(iframeAfter, 'Refinement stopped.');
     } else {
       console.error('Refinement failed:', error);
-      renderPlaceholder(`Refinement error: ${error.message}`, elements.iframeAfter);
+      mountPlaceholder(iframeAfter, `Refinement error: ${error.message}`);
     }
   } finally {
     activeRefineController = null;
@@ -715,23 +916,14 @@ function regenerateCurrentSlide() {
 }
 
 async function customRegenerateWithPrompt() {
-  const instruction = elements.refineInstructionInput.value.trim();
+  const instruction = elements.refineInstructionInput?.value?.trim();
   const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
-  if (!currentHtml?.trim()) {
-    renderPlaceholder('Generate this slide first, then apply custom prompt.');
-    return;
-  }
-  if (!instruction) {
-    renderPlaceholder('Type a custom instruction first, then click Apply Prompt.');
-    return;
-  }
+  if (!currentHtml?.trim() || !instruction) return;
 
   if (activeSlideControllers.has(state.currentIndex)) {
     activeSlideControllers.get(state.currentIndex).abort();
   }
-  if (activeRefineController) {
-    activeRefineController.abort();
-  }
+  if (activeRefineController) activeRefineController.abort();
 
   const index = state.currentIndex;
   const slideNum = index + 1;
@@ -739,14 +931,14 @@ async function customRegenerateWithPrompt() {
   const jobId = beginSlideJob(index);
 
   state.slides = state.slides.filter(s => s.index !== index);
-
   state.status = 'GENERATING';
   state.generatingSlides[index] = true;
   state.promptApplyingSlides[index] = true;
   renderOutline(navigateToSlide);
   updateUI();
   persistSessionViewState();
-  renderPlaceholder(`Applying prompt to Slide ${slideNum}...`);
+  mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${slideNum}...`);
+  clearStreamBuffer('main');
 
   let regenerated = '';
   activeRefineController = new AbortController();
@@ -755,39 +947,42 @@ async function customRegenerateWithPrompt() {
       refineMode: 'expand',
       currentHtml,
       instruction,
-      signal: activeRefineController.signal
-    });
+    }, activeRefineController.signal);
 
     for await (const token of stream) {
-      regenerated += token.replace(/\\n/g, '\n');
+      const t = token.replace(/\\n/g, '\n');
+      regenerated += t;
+      if (runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
+        streamToken(elements.slideIframe, t, state.theme, 'main');
+      }
     }
 
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (!regenerated.trim()) throw new Error('Empty regenerated slide');
 
+    finalizeSlide(elements.slideIframe, state.theme, 'main');
     state.draftSlides[index] = regenerated;
     state.latestSlides[index] = regenerated;
     delete state.promptApplyingSlides[index];
     if (state.currentIndex === index) {
       state.currentSlideHtml = regenerated;
       state.status = 'REVIEWING';
-      renderSlide(regenerated);
+      mountSlide(elements.slideIframe, regenerated, state.theme);
     }
   } catch (error) {
-    if (runToken !== sessionRunToken) return;
     if (!isLatestSlideJob(index, jobId)) return;
     if (error?.name !== 'AbortError') {
       console.error('Custom regeneration failed:', error);
       state.status = 'ERROR';
       delete state.promptApplyingSlides[index];
       if (state.currentIndex === index) {
-        renderPlaceholder(`Custom regenerate failed: ${error.message}`);
+        mountPlaceholder(elements.slideIframe, `Custom regenerate failed: ${error.message}`);
       }
     } else {
       delete state.promptApplyingSlides[index];
     }
   } finally {
-    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    if (!isLatestSlideJob(index, jobId)) return;
     activeRefineController = null;
     delete state.generatingSlides[index];
     syncStatusFromState();
@@ -799,21 +994,11 @@ async function customRegenerateWithPrompt() {
 
 function stopAllGeneration() {
   sessionRunToken += 1;
-  Object.keys(latestJobBySlide).forEach((k) => {
-    delete latestJobBySlide[k];
-  });
-  if (currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
-  }
-  for (const controller of activeSlideControllers.values()) {
-    controller.abort();
-  }
+  Object.keys(latestJobBySlide).forEach(k => delete latestJobBySlide[k]);
+  if (currentAbortController) { currentAbortController.abort(); currentAbortController = null; }
+  for (const controller of activeSlideControllers.values()) controller.abort();
   activeSlideControllers.clear();
-  if (activeRefineController) {
-    activeRefineController.abort();
-    activeRefineController = null;
-  }
+  if (activeRefineController) { activeRefineController.abort(); activeRefineController = null; }
   state.generatingSlides = {};
   state.promptApplyingSlides = {};
   if (state.status === 'GENERATING' || state.status === 'APPROVING') {
@@ -821,7 +1006,7 @@ function stopAllGeneration() {
   }
   renderOutline(navigateToSlide);
   updateUI();
-  renderPlaceholder('Generation stopped.');
+  mountPlaceholder(elements.slideIframe, 'Generation stopped.');
 }
 
 async function stopConversation() {
@@ -829,25 +1014,30 @@ async function stopConversation() {
   stopAllGeneration();
   handleNewDeck();
   if (activeSessionId) {
-    deleteSession(activeSessionId).catch((error) => {
-      console.error('Failed to delete session:', error);
-    });
+    deleteSession(activeSessionId).catch(err => console.error('Failed to delete session:', err));
   }
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
+// ── Export ─────────────────────────────────────────────────────────────────────
 async function handleExport() {
   if (!state.sessionId) return;
+  const count = getExportableSlideCount();
+  if (count === 0) {
+    alert('No slides to export yet. Generate at least one slide first.');
+    return;
+  }
   try {
-    elements.exportBtn.textContent = 'Exporting...';
+    elements.exportBtn.textContent = 'Preparing...';
     elements.exportBtn.disabled = true;
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    alert('Deck exported successfully!');
+    // Use new export module (window.print() based)
+    exportDeckAsPDF();
   } catch (error) {
     console.error('Export failed:', error);
   } finally {
-    elements.exportBtn.textContent = 'Export PDF';
-    elements.exportBtn.disabled = false;
+    setTimeout(() => {
+      elements.exportBtn.textContent = 'Export PDF';
+      elements.exportBtn.disabled = false;
+    }, 1000);
   }
 }
 

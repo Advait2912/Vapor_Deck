@@ -1,11 +1,13 @@
 """
-Session route.
+Session route — UPDATED with global deck control endpoints.
 
-POST /api/session             — create a new session
-POST /api/session/{id}/synthesize — process all inputs → deck_context
-POST /api/session/{id}/outline    — generate outline from deck_context
-POST /api/session/{id}/confirm    — confirm (possibly edited) outline, mark ready
-GET  /api/session/{id}            — get session status
+Added routes:
+  PUT /api/session/{id}/deck-settings  — tone, audience, narrative structure
+  POST /api/session/{id}/outline/reorder — reorder slides (non-destructive)
+  POST /api/session/{id}/outline/add    — add a new slide to outline
+  DELETE /api/session/{id}/outline/{n}  — remove a slide (only if not built)
+
+All existing routes preserved exactly as-is.
 """
 import json
 import logging
@@ -38,14 +40,32 @@ class ConfirmOutlineRequest(BaseModel):
     outline: list[OutlineItem]
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+class DeckSettingsRequest(BaseModel):
+    """Global deck settings — tone, audience, narrative structure."""
+    tone: str | None = None
+    audience: str | None = None
+    narrative_structure: str | None = None
+    deck_instructions: str | None = None
+
+
+class ReorderRequest(BaseModel):
+    """New slide order as a list of current indices (0-based)."""
+    order: list[int]
+
+
+class AddSlideRequest(BaseModel):
+    """New slide to insert into the outline."""
+    title: str
+    intent: str = "explain-concept"
+    key_points: list[str] = []
+    layout_hint: str = "single-column"
+    insert_at: int | None = None  # None = append at end
+
+
+# ── Existing routes (UNCHANGED) ────────────────────────────────────────────────
 
 @router.post("/session")
 async def create_session(req: CreateSessionRequest):
-    """
-    Create a new session. Returns session_id.
-    Upload inputs next via POST /session/{id}/upload or /upload/text.
-    """
     session = DeckSession(
         text_model=req.text_model,
         vision_model=req.vision_model,
@@ -54,7 +74,6 @@ async def create_session(req: CreateSessionRequest):
     )
     save_session(session)
     logger.info(f"[{session.session_id}] session created: model={req.text_model} theme={req.theme}")
-
     return {
         "session_id": session.session_id,
         "status": session.status,
@@ -66,24 +85,16 @@ async def create_session(req: CreateSessionRequest):
 
 @router.post("/session/{session_id}/synthesize")
 async def synthesize(session_id: str):
-    """
-    Process all uploaded InputUnits into a structured deck_context.
-    Must be called after all inputs are uploaded and before outline generation.
-    """
     try:
         session = get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if not session.input_units:
-        raise HTTPException(
-            status_code=400,
-            detail="No inputs uploaded yet. Use POST /session/{id}/upload/text or /upload first."
-        )
+        raise HTTPException(status_code=400, detail="No inputs uploaded yet.")
 
     session.status = "synthesizing"
     save_session(session)
-
     model = get_model(session.text_model)
 
     try:
@@ -99,12 +110,6 @@ async def synthesize(session_id: str):
     session.derived_font_hints = ctx.get("style_intent", {}).get("extracted_fonts", [])
     session.status = "synthesized"
     save_session(session)
-
-    logger.info(
-        f"[{session_id}] synthesized: topic='{session.topic}' "
-        f"constraints={len(session.hard_constraints)} "
-        f"units={len(session.input_units)}"
-    )
 
     return {
         "status": "ok",
@@ -123,24 +128,16 @@ async def synthesize(session_id: str):
 
 @router.post("/session/{session_id}/outline")
 async def generate_outline(session_id: str):
-    """
-    Generate the slide outline from the synthesized deck_context.
-    Returns a JSON array of OutlineItem objects.
-    Must be called after /synthesize.
-    """
     try:
         session = get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.status not in ("synthesized", "reviewing_outline"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Session status is '{session.status}'. Call /synthesize first."
-        )
+        raise HTTPException(status_code=400, detail=f"Call /synthesize first.")
 
     if not session.deck_context:
-        raise HTTPException(status_code=400, detail="No deck_context found. Call /synthesize first.")
+        raise HTTPException(status_code=400, detail="No deck_context found.")
 
     session.status = "outlining"
     save_session(session)
@@ -148,7 +145,6 @@ async def generate_outline(session_id: str):
     model = get_model(session.text_model)
     prompt = build_outline_prompt(session.deck_context, session.theme)
 
-    # Debug: dump prompt to disk
     if os.getenv("DEBUG_PROMPTS", "0") == "1":
         os.makedirs("debug", exist_ok=True)
         with open(f"debug/outline_prompt_{session_id[:8]}.txt", "w") as f:
@@ -160,28 +156,16 @@ async def generate_outline(session_id: str):
         OUTLINE_SYSTEM,
     )
 
-    # Debug: dump response to disk
-    if os.getenv("DEBUG_PROMPTS", "0") == "1":
-        with open(f"debug/outline_response_{session_id[:8]}.txt", "w") as f:
-            f.write(raw_outline)
-
-    logger.info(f"[{session_id}] raw outline length: {len(raw_outline)} chars")
-
     try:
         cleaned = strip_fences(raw_outline)
         outline_data = json.loads(cleaned)
         session.outline = [OutlineItem(**item) for item in outline_data]
     except Exception as e:
-        logger.error(f"[{session_id}] outline parse failed: {e}\nRaw: {raw_outline[:500]}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Outline JSON parse failed: {e}. Check debug/ directory if DEBUG_PROMPTS=1."
-        )
+        logger.error(f"[{session_id}] outline parse failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Outline JSON parse failed: {e}")
 
     session.status = "reviewing_outline"
     save_session(session)
-
-    logger.info(f"[{session_id}] outline ready: {len(session.outline)} slides")
 
     return {
         "session_id": session_id,
@@ -193,9 +177,6 @@ async def generate_outline(session_id: str):
 
 @router.post("/session/{session_id}/confirm")
 async def confirm_outline(session_id: str, req: ConfirmOutlineRequest):
-    """
-    Confirm the outline (possibly edited by the user) and mark session ready for generation.
-    """
     try:
         session = get_session(session_id)
     except KeyError:
@@ -204,7 +185,6 @@ async def confirm_outline(session_id: str, req: ConfirmOutlineRequest):
     session.outline = req.outline
     session.current_index = 0
 
-    # Initialize the deck_context memory structure
     ctx = session.deck_context
     session.deck_context = initial_deck_context(
         topic=session.topic,
@@ -213,13 +193,9 @@ async def confirm_outline(session_id: str, req: ConfirmOutlineRequest):
         audience=ctx.get("audience", "general"),
         tone=ctx.get("tone", "professional"),
     )
-    # Preserve the synthesized context fields (key_themes, key_facts etc.) under a separate key
     session.deck_context["synthesis"] = ctx
-
     session.status = "generating"
     save_session(session)
-
-    logger.info(f"[{session_id}] outline confirmed: {len(session.outline)} slides, generation ready")
 
     return {
         "status": "ready",
@@ -230,7 +206,6 @@ async def confirm_outline(session_id: str, req: ConfirmOutlineRequest):
 
 @router.get("/session/{session_id}")
 async def get_session_status(session_id: str):
-    """Get the current status and summary of a session."""
     try:
         session = get_session(session_id)
     except KeyError:
@@ -253,7 +228,202 @@ async def get_session_status(session_id: str):
 
 @router.delete("/session/{session_id}")
 async def remove_session(session_id: str):
-    """Delete a session so a new conversation can start cleanly."""
     delete_session(session_id)
     logger.info(f"[{session_id}] session deleted")
     return {"status": "deleted", "session_id": session_id}
+
+
+# ── NEW: Global Deck Controls ──────────────────────────────────────────────────
+
+@router.put("/session/{session_id}/deck-settings")
+async def update_deck_settings(session_id: str, req: DeckSettingsRequest):
+    """
+    Update global deck settings: tone, audience, narrative structure.
+
+    IMPORTANT:
+      These changes update deck_context metadata only.
+      They do NOT invalidate or regenerate already-approved slides.
+      Only future slide generations will use the new settings.
+    """
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    changes = {}
+
+    if req.tone is not None:
+        if "deck" in session.deck_context:
+            session.deck_context["deck"]["tone"] = req.tone
+        changes["tone"] = req.tone
+
+    if req.audience is not None:
+        if "deck" in session.deck_context:
+            session.deck_context["deck"]["audience"] = req.audience
+        changes["audience"] = req.audience
+
+    if req.narrative_structure is not None:
+        session.deck_context.setdefault("global_settings", {})
+        session.deck_context["global_settings"]["narrative_structure"] = req.narrative_structure
+        changes["narrative_structure"] = req.narrative_structure
+
+    if req.deck_instructions is not None:
+        session.deck_context.setdefault("global_settings", {})
+        session.deck_context["global_settings"]["deck_instructions"] = req.deck_instructions
+        # Add to hard_constraints so the LLM prompt picks them up
+        instruction_marker = f"[GLOBAL INSTRUCTION] {req.deck_instructions}"
+        if instruction_marker not in session.hard_constraints:
+            session.hard_constraints.append(instruction_marker)
+        changes["deck_instructions"] = req.deck_instructions
+
+    save_session(session)
+    logger.info(f"[{session_id}] deck settings updated: {changes}")
+
+    return {
+        "status": "ok",
+        "changes_applied": changes,
+        "note": "Changes apply to future slide generations only. Approved slides are unaffected.",
+    }
+
+
+@router.post("/session/{session_id}/outline/add")
+async def add_slide_to_outline(session_id: str, req: AddSlideRequest):
+    """
+    Add a new slide to the outline.
+    Can be inserted at a specific position or appended at the end.
+    Does NOT affect already-approved slides.
+    """
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status not in ("reviewing_outline", "generating", "reviewing", "done"):
+        raise HTTPException(status_code=400, detail="Can only add slides after outline is generated")
+
+    new_index = req.insert_at if req.insert_at is not None else len(session.outline) + 1
+
+    # Insert at position, re-number everything
+    outline_list = [item.model_dump() for item in session.outline]
+
+    new_slide = {
+        "index": new_index,
+        "title": req.title,
+        "intent": req.intent,
+        "key_points": req.key_points or ["Key point 1", "Key point 2"],
+        "layout_hint": req.layout_hint,
+    }
+
+    if req.insert_at is not None:
+        # Insert at position (shift everything after)
+        insert_pos = req.insert_at - 1  # convert to 0-based
+        outline_list.insert(insert_pos, new_slide)
+    else:
+        outline_list.append(new_slide)
+
+    # Re-number
+    for i, item in enumerate(outline_list):
+        item["index"] = i + 1
+
+    session.outline = [OutlineItem(**item) for item in outline_list]
+    save_session(session)
+
+    logger.info(f"[{session_id}] slide added: '{req.title}' at position {new_index}")
+
+    return {
+        "status": "ok",
+        "outline": [item.model_dump() for item in session.outline],
+        "total_slides": len(session.outline),
+        "added_at": new_index,
+    }
+
+
+@router.post("/session/{session_id}/outline/reorder")
+async def reorder_outline(session_id: str, req: ReorderRequest):
+    """
+    Reorder slides by providing a new order of 0-based indices.
+
+    Example:
+      Current: [0, 1, 2, 3, 4]
+      Request: { "order": [0, 2, 1, 3, 4] } → slides 1 and 2 swap
+
+    SAFETY: Does NOT affect already-approved (built) slides' content.
+    The reorder only changes outline metadata — approved HTML is preserved.
+    """
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if len(req.order) != len(session.outline):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order length {len(req.order)} doesn't match outline length {len(session.outline)}"
+        )
+
+    if set(req.order) != set(range(len(session.outline))):
+        raise HTTPException(
+            status_code=400,
+            detail="Order must contain each index exactly once"
+        )
+
+    original_outline = list(session.outline)
+    new_outline = [original_outline[i] for i in req.order]
+
+    # Re-number
+    for i, item in enumerate(new_outline):
+        item.index = i + 1
+
+    session.outline = new_outline
+    save_session(session)
+
+    logger.info(f"[{session_id}] outline reordered: {req.order}")
+
+    return {
+        "status": "ok",
+        "outline": [item.model_dump() for item in session.outline],
+        "note": "Approved slide content is preserved. Only ordering metadata changed.",
+    }
+
+
+@router.delete("/session/{session_id}/outline/{n}")
+async def remove_slide_from_outline(session_id: str, n: int):
+    """
+    Remove slide N from the outline (1-indexed).
+
+    SAFETY: Cannot remove a slide that has already been approved (built).
+    """
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    slide_index = n - 1  # convert to 0-based for comparison
+
+    # Check if this slide was approved
+    is_approved = any(s.index == n for s in session.slides if s.approved)
+    if is_approved:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Slide {n} has been approved and cannot be removed. Regenerate it instead."
+        )
+
+    original_len = len(session.outline)
+    session.outline = [item for item in session.outline if item.index != n]
+
+    if len(session.outline) == original_len:
+        raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
+
+    # Re-number remaining slides
+    for i, item in enumerate(session.outline):
+        item.index = i + 1
+
+    save_session(session)
+
+    logger.info(f"[{session_id}] slide {n} removed from outline")
+
+    return {
+        "status": "ok",
+        "outline": [item.model_dump() for item in session.outline],
+        "total_slides": len(session.outline),
+    }

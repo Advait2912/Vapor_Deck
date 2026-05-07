@@ -1,10 +1,33 @@
+/* DARK TECH THEME
+   ──────────────────
+   Layer 2 of the 3-layer CSS architecture.
+   Defines CSS variables consumed by LLM-generated slide CSS (Layer 3).
+   This file is injected into each slide iframe — NEVER into the app.
+
+   Three-Layer Architecture:
+     Layer 1: front/src/style.css     → app UI only
+     Layer 2: this file               → slide theme variables
+     Layer 3: <style> in LLM HTML     → per-slide scoped overrides
+*/
+
 :root {
+  /* Core palette */
   --bg: #000000;
   --surface: #111111;
   --text: #ffffff;
+  --text-muted: #888888;
   --accent: #8b5cf6;
-  --font-head: 'Inter', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --accent-glow: rgba(139, 92, 246, 0.3);
+
+  /* Component colors */
+  --border: #222222;
+  --code-bg: #0d1117;
+  --highlight: rgba(139, 92, 246, 0.15);
+
+  /* Typography */
+  --font-head: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 body {
@@ -12,48 +35,56 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   margin: 0;
-  padding: 60px;
+  padding: 40px;
   height: 100vh;
   box-sizing: border-box;
 }
 
-h1 {
-  font-family: var(--font-head);
-  color: var(--accent);
-  font-size: 3.5rem;
-  margin-bottom: 30px;
-}
+/* Headings */
+h1 { font-family: var(--font-head); color: var(--accent); font-size: clamp(2rem, 4vw, 3.5rem); margin-bottom: 20px; }
+h2 { font-family: var(--font-head); color: var(--text); font-size: clamp(1.4rem, 2.5vw, 2.2rem); margin-bottom: 16px; }
+h3 { font-family: var(--font-head); color: var(--text-muted); font-size: clamp(1rem, 1.8vw, 1.5rem); }
 
-p {
-  font-size: 1.5rem;
+p { font-size: clamp(0.9rem, 1.5vw, 1.2rem); line-height: 1.65; color: #ccc; }
+
+/* Code blocks */
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: clamp(0.75rem, 1.2vw, 0.9rem);
   line-height: 1.6;
-  color: #ccc;
 }
 
-/* Entrance Animations */
+code {
+  font-family: var(--font-mono);
+  background: rgba(139, 92, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+pre code { background: none; padding: 0; }
+
+/* Lists */
+ul, ol { padding-left: 24px; }
+li { margin-bottom: 8px; font-size: clamp(0.85rem, 1.4vw, 1.1rem); color: #ddd; line-height: 1.55; }
+
+/* Entrance animations — triggered by JS adding .visible */
 .reveal {
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   transition-delay: var(--delay, 0s);
 }
-
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+.reveal.visible { opacity: 1; transform: translateY(0); }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--surface);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }

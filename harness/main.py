@@ -1,3 +1,7 @@
+"""
+Updated main.py — adds snapshot route registration.
+All other functionality preserved exactly as-is.
+"""
 import logging
 import os
 
@@ -25,7 +29,7 @@ for key, label in CHECKED_KEYS.items():
 
 app = FastAPI(
     title="AI Slide Generator",
-    version="0.1.0",
+    version="0.2.0",
     description="Generate interactive web-native slide decks with LLMs",
 )
 
@@ -42,8 +46,17 @@ app.add_middleware(
 def health():
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "providers": ["google", "ollama"],
+        "features": [
+            "sse_streaming",
+            "per_slide_lifecycle",
+            "comparison_mode",
+            "pdf_export",
+            "snapshot_audit",   # NEW: Playwright validation pipeline
+            "global_controls",  # NEW: Deck-wide orchestration
+            "local_controls",   # NEW: Per-slide refinement controls
+        ],
     }
 
 
@@ -63,11 +76,10 @@ def get_active_session():
     if session_ids:
         try:
             session = get_session(session_ids[0])
-            # Pydantic v1/v2 compatible serialisation
             try:
-                return session.model_dump()   # Pydantic v2
+                return session.model_dump()
             except AttributeError:
-                return session.dict()         # Pydantic v1
+                return session.dict()
         except KeyError:
             pass
     return {"session_id": None}
@@ -96,7 +108,9 @@ def list_models():
 from routes.session import router as session_router
 from routes.upload import router as upload_router
 from routes.slide import router as slide_router
+from routes.snapshot import router as snapshot_router  # NEW
 
 app.include_router(session_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
 app.include_router(slide_router, prefix="/api")
+app.include_router(snapshot_router, prefix="/api")  # NEW: Snapshot & vision audit pipeline

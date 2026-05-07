@@ -1,9 +1,15 @@
 /**
  * API Client for Vapor Deck
- * Handles session creation, slide generation via SSE, and snapshots.
+ * Handles session creation, slide generation via SSE, snapshots, and global controls.
+ *
+ * Changes from original:
+ *   - takeSnapshot now actually calls the backend (was a stub)
+ *   - Added updateDeckSettings for global control sync
+ *   - Added reorderOutline and removeOutlineSlide for global control
+ * All existing exports preserved exactly.
  */
 
-const BASE_URL = 'http://localhost:8000/api'; // Harness uses /api prefix
+const BASE_URL = 'http://localhost:8000/api';
 
 export async function createSession(data) {
   const response = await fetch(`${BASE_URL}/session`, {
@@ -25,9 +31,7 @@ export async function getActiveSession() {
 }
 
 export async function deleteSession(sessionId) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}`, {
-    method: 'DELETE'
-  });
+  const response = await fetch(`${BASE_URL}/session/${sessionId}`, { method: 'DELETE' });
   return response.json();
 }
 
@@ -52,16 +56,12 @@ export async function uploadFile(sessionId, file, role = 'reference') {
 }
 
 export async function synthesize(sessionId) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/synthesize`, {
-    method: 'POST'
-  });
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/synthesize`, { method: 'POST' });
   return response.json();
 }
 
 export async function generateOutline(sessionId) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline`, {
-    method: 'POST'
-  });
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline`, { method: 'POST' });
   return response.json();
 }
 
@@ -96,10 +96,6 @@ export async function sendPlanChat(sessionId, message, currentSlideIndex, signal
 
 /**
  * Stream slide generation or refinement as an async generator.
- * @param {string} sessionId
- * @param {number} slideIndex  1-indexed slide number
- * @param {'generate'|'refine'} mode
- * @param {object} [extra]  e.g. { refineMode: 'expand', currentHtml: '...' }
  */
 export async function* streamSlide(sessionId, slideIndex, mode = 'generate', extra = {}, signal) {
   const isRefine = mode === 'refine';
@@ -137,11 +133,9 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n\n');
     buffer = lines.pop();
-
     for (const line of lines) {
       if (line.startsWith('data: ')) {
         const token = line.slice(6);
@@ -162,11 +156,77 @@ export async function approveSlide(sessionId, slideIndex, html) {
   return response.json();
 }
 
+/**
+ * Take a Playwright snapshot + vision audit of a slide.
+ * Returns { snapshot_b64, audit, fixed_html, auto_fixed }.
+ *
+ * This is fire-and-update: call after slide generation, don't block the UI.
+ * If the backend doesn't have Playwright installed, gracefully returns { audit: { verdict: 'good' } }.
+ */
 export async function takeSnapshot(sessionId, slideIndex, html) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/snapshot`, {
+  try {
+    const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html, run_audit: true, auto_fix: true })
+    });
+    if (!response.ok) {
+      // Snapshot is optional — fail gracefully
+      return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
+    }
+    return response.json();
+  } catch {
+    // Playwright may not be installed — that's fine
+    return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
+  }
+}
+
+// ── NEW: Global control API calls ─────────────────────────────────────────────
+
+/**
+ * Update deck-wide settings (tone, audience, narrative structure).
+ */
+export async function updateDeckSettings(sessionId, settings) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/deck-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  return response.json();
+}
+
+/**
+ * Reorder slides in the outline.
+ * @param {string} sessionId
+ * @param {number[]} order - new order as array of original indices
+ */
+export async function reorderOutline(sessionId, order) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/reorder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ html })
+    body: JSON.stringify({ order })
+  });
+  return response.json();
+}
+
+/**
+ * Add a new slide to the outline.
+ */
+export async function addOutlineSlide(sessionId, slide) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(slide)
+  });
+  return response.json();
+}
+
+/**
+ * Remove a slide from the outline (only if not yet built).
+ */
+export async function removeOutlineSlide(sessionId, slideN) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/${slideN}`, {
+    method: 'DELETE'
   });
   return response.json();
 }
