@@ -7,7 +7,7 @@
  *   - Uses renderer/index.js (isolated iframe renderer) for slide rendering
  *   - Integrates comparison.js for split-view refinement
  *   - Integrates export.js for PDF export
- *   - Integrates global_control.js + local_control.js in sidebar
+ *   - Integrates global_control.js in sidebar
  *   - Calls /snapshot route after slide generation (vision audit)
  *   - Per-slide lifecycle states (PLANNING → BUILDING → REVIEWING → APPROVED)
  *
@@ -47,7 +47,6 @@ import { setupEventListeners } from './events.js';
 import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer } from './renderer/index.js';
 import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
 import { renderGlobalControls, globalState, addSlideToOutline } from './ui/global_control.js';
-import { renderLocalControls } from './ui/local_control.js';
 import {
   comparisonState,
   enterComparison,
@@ -67,6 +66,10 @@ let currentAbortController = null;
 let sessionRunToken = 0;
 const latestJobBySlide = {};
 let slideJobCounter = 0;
+// Per-index audit job versioning — prevents stale results from a slow
+// previous audit overwriting a newer one (race condition fix).
+const latestAuditJobBySlide = {};
+let auditJobCounter = 0;
 const SESSION_VIEW_PREFIX = 'vapordeck:view:';
 
 function beginSlideJob(index) {
@@ -103,7 +106,8 @@ function persistSessionViewState() {
     currentIndex: state.currentIndex || 0,
     currentSlideHtml: state.currentSlideHtml || '',
     messages: state.messages || [],
-    slidePhases: state.slidePhases || {}
+    slidePhases: state.slidePhases || {},
+    slideAudits: state.slideAudits || {},  // persist audit results across navigation/reload
   };
   try {
     localStorage.setItem(getSessionViewKey(state.sessionId), JSON.stringify(payload));
@@ -122,7 +126,15 @@ function clearSessionViewState(sessionId) {
 function resumeGeneratingSlidesFromCache() {
   const indices = Object.keys(state.generatingSlides || {}).map(Number);
   if (!indices.length) return;
-  indices.forEach((idx) => startSlideGeneration(idx, true));
+  // ONLY resume slides that are NOT already approved
+  indices.forEach((idx) => {
+    const isApproved = state.slides.some(s => s.index === idx);
+    if (!isApproved) {
+      startSlideGeneration(idx, true);
+    } else {
+      delete state.generatingSlides[idx];
+    }
+  });
 }
 
 function syncStatusFromState() {
@@ -196,33 +208,6 @@ function mountGlobalControlsInSidebar() {
   }
 }
 
-// ── Right sidebar: render local controls ─────────────────────────────────────
-function mountLocalControlsInSidebar() {
-  const infoList = elements.infoList;
-  if (!infoList) return;
-
-  // Only show in build mode with a slide available
-  const inBuildMode = !canPlanSlide(state.currentIndex) || state.mode === 'build';
-  const hasSlide = !!(state.draftSlides?.[state.currentIndex] || state.currentSlideHtml);
-
-  if (inBuildMode && state.outline.length > 0) {
-    // Insert local controls at top of info sidebar
-    let lcContainer = document.getElementById('local-controls-container');
-    if (!lcContainer) {
-      lcContainer = document.createElement('div');
-      lcContainer.id = 'local-controls-container';
-      infoList.parentNode.insertBefore(lcContainer, infoList);
-    }
-
-    renderLocalControls(lcContainer, {
-      onRefine: (mode, instruction) => {
-        startRefinement(mode, instruction);
-      },
-      onRegenerate: () => regenerateCurrentSlide(),
-      onApprove: () => approveSlide(),
-    });
-  }
-}
 
 // ── Initialization ─────────────────────────────────────────────────────────────
 async function init() {
@@ -265,6 +250,13 @@ async function init() {
 
   if (!state.outline.length) {
     mountPlaceholder(elements.slideIframe, 'Slide Preview Area');
+  }
+
+  // BUG 8: Manual re-audit trigger
+  if (elements.visionIndicator) {
+    elements.visionIndicator.addEventListener('click', () => {
+      _runVisionAuditInBackground(state.currentIndex, state.currentIndex + 1, state.currentSlideHtml);
+    });
   }
 }
 
@@ -375,7 +367,9 @@ async function loadProjectInfo() {
         model: session.text_model || state.model,
         mode: session.mode || 'plan',
         messages: cached.messages || [],
-        slidePhases: cached.slidePhases || {}
+        slidePhases: cached.slidePhases || {},
+        slideAudits: cached.slideAudits || {},  // restore audit results from cache
+        auditingSlides: {},                      // always start fresh, never restore in-flight audits
       });
 
       if (state.messages.length > 0) {
@@ -393,7 +387,12 @@ async function loadProjectInfo() {
         renderOutlineContentSummary(elements.infoList);
       } else if (s === 'GENERATING') {
         state.phase = 'DESIGN';
-        mountPlaceholder(elements.slideIframe, 'Resuming previous generation...');
+        const approved = state.slides.find(s => s.index === state.currentIndex);
+        if (approved) {
+          mountSlide(elements.slideIframe, approved.html, state.theme);
+        } else {
+          mountPlaceholder(elements.slideIframe, 'Resuming previous generation...');
+        }
         resumeGeneratingSlidesFromCache();
       } else if (s === 'REVIEWING' || s === 'DONE') {
         state.phase = 'DESIGN';
@@ -426,13 +425,13 @@ async function handleNewDeck() {
     sessionId: null, outline: [], slides: [], messages: [],
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
     generatingSlides: {}, slidePhases: {}, currentIndex: 0,
+    slideAudits: {}, auditingSlides: {},  // clear all audit state
     currentSlideHtml: '', status: 'IDLE', phase: 'CONTENT',
     mode: 'plan', projectPath: state.projectPath
   });
 
   clearUI();
   document.getElementById('global-controls-container')?.remove();
-  document.getElementById('local-controls-container')?.remove();
 
   if (oldSessionId) {
     try { await deleteSession(oldSessionId); } catch {}
@@ -528,7 +527,6 @@ async function handleSwitchMode(newMode) {
     const res = await updateMode(state.sessionId, newMode);
     updateState({ mode: res.mode });
     updateUI();
-    mountLocalControlsInSidebar();
     persistSessionViewState();
   } catch (error) {
     console.error('Mode switch failed:', error);
@@ -606,7 +604,6 @@ function navigateToSlide(index) {
     state.status = 'REVIEWING';
     mountSlide(elements.slideIframe, latest, state.theme);
     renderOutline(navigateToSlide);
-    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
@@ -618,7 +615,6 @@ function navigateToSlide(index) {
     state.status = 'REVIEWING';
     mountSlide(elements.slideIframe, draft, state.theme);
     renderOutline(navigateToSlide);
-    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
@@ -630,7 +626,6 @@ function navigateToSlide(index) {
     state.status = 'REVIEWING';
     mountSlide(elements.slideIframe, saved.html, state.theme);
     renderOutline(navigateToSlide);
-    mountLocalControlsInSidebar();
     updateUI();
     persistSessionViewState();
     return;
@@ -717,7 +712,6 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     }
 
     updateUI();
-    mountLocalControlsInSidebar();
     renderOutline(navigateToSlide);
     persistSessionViewState();
 
@@ -752,60 +746,142 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   }
 }
 
-// ── Vision Audit (background, non-blocking) ───────────────────────────────────
+// ── Vision Audit (background, non-blocking) ───────────────────────────────
 async function _runVisionAuditInBackground(index, slideNum, html) {
   if (!state.sessionId) return;
 
-  const visionStatus = elements.visionStatus;
-  if (visionStatus) {
-    visionStatus.style.display = 'inline-block';
-    visionStatus.style.color = 'var(--accent)';
-    visionStatus.textContent = 'VISION: ANALYZING...';
+  // Versioning: discard results from a superseded audit run (race condition fix)
+  const jobToken = ++auditJobCounter;
+  latestAuditJobBySlide[index] = jobToken;
+  const isLatestAuditJob = () => latestAuditJobBySlide[index] === jobToken;
+
+  // Track that this slide is actively being audited
+  state.auditingSlides[index] = jobToken;
+
+  const isCurrent = () => state.currentIndex === index;
+
+  // Show "ANALYZING..." only when the audit actually begins, not during generation
+  if (isCurrent()) {
+    elements.visionIndicator.style.display = 'flex';
+    elements.visionIndicator.className = 'vision-indicator analyzing';
+    elements.visionBadge.textContent = 'ANALYZING...';
+    elements.visionIndicator.title = 'Vision model is auditing layout...';
   }
 
   try {
     const result = await takeSnapshot(state.sessionId, slideNum, html);
-    const verdict = result?.audit?.verdict || 'good';
+
+    // Discard if a newer audit for this slide has already started
+    if (!isLatestAuditJob()) return;
+
+    const audit = result?.audit;
+    const verdict = audit?.verdict || 'good';
     const autoFixed = result?.auto_fixed;
+    const issues = audit?.visual_issues || [];
+    const timedOut = audit?.timed_out;
 
-    if (visionStatus) {
-      if (verdict === 'good') {
-        visionStatus.textContent = 'VISION: LAYOUT OK';
-        visionStatus.style.color = '#10b981';
-      } else if (verdict === 'fixable') {
-        visionStatus.textContent = 'VISION: MINOR ISSUES';
-        visionStatus.style.color = '#fbbf24';
-      } else {
-        visionStatus.textContent = autoFixed ? 'VISION: AUTO-FIXED' : 'VISION: ISSUES';
-        visionStatus.style.color = autoFixed ? '#10b981' : '#ef4444';
-      }
+    // Store the audit result in the dedicated map (NOT on draftSlides which is a raw string)
+    state.slideAudits[index] = audit || { verdict: 'good', visual_issues: [] };
+    persistSessionViewState();
+
+    // Update the indicator for the currently visible slide
+    if (isCurrent()) {
+      _applyAuditToIndicator(verdict, autoFixed, timedOut, issues);
     }
 
-    // If auto-fix produced better HTML, update the slide
+    // If auto-fix produced better HTML, update the slide and notify the user
     if (autoFixed && result.fixed_html?.trim()) {
-      const fixedHtml = result.fixed_html;
-      state.draftSlides[index] = fixedHtml;
-      state.latestSlides[index] = fixedHtml;
-      if (state.currentIndex === index) {
-        state.currentSlideHtml = fixedHtml;
-        mountSlide(elements.slideIframe, fixedHtml, state.theme);
-        console.info(`[slide ${slideNum}] Vision auto-fix applied`);
+      if (state.draftSlides[index] === html) {
+        const fixedHtml = result.fixed_html;
+        state.draftSlides[index] = fixedHtml;
+        state.latestSlides[index] = fixedHtml;
+        if (state.currentIndex === index) {
+          state.currentSlideHtml = fixedHtml;
+          mountSlide(elements.slideIframe, fixedHtml, state.theme);
+        }
+        persistSessionViewState();
+        const issueList = issues.length ? issues.slice(0, 3).join('; ') : 'layout issues';
+        showAuditToast(`✨ Vision auto-fix applied to Slide ${slideNum}: ${issueList}`, 'info');
       }
-      persistSessionViewState();
     }
-
-    setTimeout(() => {
-      if (visionStatus) visionStatus.style.display = 'none';
-    }, 4000);
 
   } catch (err) {
-    // Vision audit failure is non-fatal
+    if (!isLatestAuditJob()) return;
     console.warn('Vision audit failed (non-fatal):', err);
-    if (visionStatus) {
-      visionStatus.textContent = 'VISION: N/A';
-      setTimeout(() => { visionStatus.style.display = 'none'; }, 2000);
+    state.slideAudits[index] = { verdict: 'audit_failed', visual_issues: [err.message] };
+    if (isCurrent()) {
+      _applyAuditToIndicator('audit_failed', false, false, [err.message]);
+    }
+  } finally {
+    if (isLatestAuditJob()) {
+      delete state.auditingSlides[index];
     }
   }
+}
+
+/**
+ * Apply an audit verdict to the vision indicator element.
+ * Handles all four verdict levels explicitly.
+ */
+function _applyAuditToIndicator(verdict, autoFixed, timedOut, issues = []) {
+  elements.visionIndicator.style.display = 'flex';
+
+  if (timedOut) {
+    elements.visionIndicator.className = 'vision-indicator error';
+    elements.visionBadge.textContent = 'TIMED OUT';
+    elements.visionIndicator.title = 'Vision audit timed out. Click to re-audit.';
+    return;
+  }
+
+  const issueTitle = issues.length ? `Issues:\n• ${issues.join('\n• ')}` : '';
+
+  switch (verdict) {
+    case 'good':
+      elements.visionIndicator.className = 'vision-indicator good';
+      elements.visionBadge.textContent = 'LAYOUT OK';
+      elements.visionIndicator.title = 'Visual layout looks clean and professional.';
+      break;
+    case 'fixable':
+      elements.visionIndicator.className = 'vision-indicator fixable';
+      elements.visionBadge.textContent = autoFixed ? 'AUTO-FIXED' : 'MINOR ISSUES';
+      elements.visionIndicator.title = issueTitle || 'Minor layout issues detected.';
+      break;
+    case 'regenerate':
+      elements.visionIndicator.className = 'vision-indicator regenerate';
+      elements.visionBadge.textContent = autoFixed ? 'AUTO-FIXED' : 'ISSUES FOUND';
+      elements.visionIndicator.title = issueTitle || 'Significant layout issues detected.';
+      break;
+    case 'audit_failed':
+    default:
+      elements.visionIndicator.className = 'vision-indicator error';
+      elements.visionBadge.textContent = 'AUDIT FAILED';
+      elements.visionIndicator.title = issues[0] || 'Audit engine error. Click to retry.';
+      break;
+  }
+}
+
+/**
+ * Show a transient toast notification for vision audit events.
+ * Auto-dismisses after 6 seconds; can also be closed manually.
+ */
+function showAuditToast(message, type = 'info') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `audit-toast audit-toast-${type}`;
+  toast.innerHTML = `<span class="toast-msg">${message}</span><button class="toast-close" title="Dismiss">×</button>`;
+  toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('toast-fade-out');
+    setTimeout(() => toast.remove(), 400);
+  }, 6000);
 }
 
 // ── Slide Approval ────────────────────────────────────────────────────────────
@@ -821,10 +897,18 @@ async function approveSlide() {
     state.status = 'APPROVING';
     updateUI();
 
+    // Read the audit from slideAudits — NOT from draftSlides which is a raw HTML string
+    const audit = state.slideAudits[approvedIndex] || null;
+
     state.slides = state.slides.filter(s => s.index !== approvedIndex);
-    state.slides.push({ index: approvedIndex, html });
+    state.slides.push({ 
+      index: approvedIndex, 
+      html,
+      audit: audit // Preserve the vision audit result for the backend
+    });
     state.latestSlides[approvedIndex] = html;
     delete state.draftSlides[approvedIndex];
+    delete state.generatingSlides[approvedIndex];
 
     if (approvedIndex < state.outline.length - 1) {
       const nextPending = state.outline.findIndex((_, idx) => {
@@ -1039,6 +1123,11 @@ async function handleExport() {
       elements.exportBtn.disabled = false;
     }, 1000);
   }
+}
+
+// ── Manual Re-audit ──────────────────────────────────────────────────────────
+export function manualAudit() {
+  _runVisionAuditInBackground(state.currentIndex, state.currentIndex + 1, state.currentSlideHtml);
 }
 
 init();

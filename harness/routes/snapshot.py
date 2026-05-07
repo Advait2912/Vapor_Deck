@@ -17,6 +17,8 @@ from ai.router import get_model
 from store.sessions import get_session, save_session
 from models.audit import VisionAuditResult
 
+import time
+
 logger = logging.getLogger("snapshot_route")
 router = APIRouter()
 
@@ -107,11 +109,52 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
             logger.warning(f"[{session_id}] capture_and_audit failed (non-fatal): {e}")
             audit_result = VisionAuditResult(verdict="good", visual_issues=[f"Audit error: {e}"])
 
-    # Store snapshot in session slide data if we got one
+    # BUG 17: Save snapshot to filesystem to prevent session bloat
+    snapshot_url = None
     if screenshot_b64:
+        try:
+            import base64
+            import os
+            import glob
+            from store.sessions import get_project_dir
+            
+            # Use session_id and slide index for unique filename
+            # We add a timestamp to prevent browser caching issues
+            timestamp = int(time.time())
+            filename = f"{session_id}_slide_{n}_{timestamp}.png"
+            
+            # Save to project dir snapshots folder
+            snapshot_dir = get_project_dir() / "snapshots"
+            os.makedirs(snapshot_dir, exist_ok=True)
+
+            # Clean up old snapshots for this specific slide before writing the new one
+            old_pattern = str(snapshot_dir / f"{session_id}_slide_{n}_*.png")
+            for old_file in glob.glob(old_pattern):
+                try:
+                    os.remove(old_file)
+                except OSError:
+                    pass
+
+            filepath = snapshot_dir / filename
+            
+            with open(filepath, "wb") as f:
+                f.write(base64.b64decode(screenshot_b64))
+            
+            snapshot_url = f"/api/snapshots/{filename}"
+            logger.info(f"[{session_id}] Snapshot saved: {filepath}")
+        except Exception as e:
+            logger.warning(f"[{session_id}] Failed to save snapshot to FS: {e}")
+
+    # Store metadata in session slide data
+    if snapshot_url or audit_result:
         existing_slide = next((s for s in session.slides if s.index == n), None)
         if existing_slide:
-            existing_slide.snapshot_b64 = screenshot_b64
+            if snapshot_url:
+                existing_slide.snapshot_url = snapshot_url
+                # Keep b64 as None to save space in JSON
+                existing_slide.snapshot_b64 = None 
+            if audit_result:
+                existing_slide.audit = audit_result.model_dump()
             save_session(session)
 
     logger.info(
@@ -122,6 +165,7 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
 
     return {
         "snapshot_b64": screenshot_b64,
+        "snapshot_url": snapshot_url,
         "audit": audit_result.model_dump() if audit_result else {"verdict": "good"},
         "fixed_html": fixed_html,
         "auto_fixed": fixed_html is not None,

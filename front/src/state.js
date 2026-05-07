@@ -9,6 +9,10 @@ export const state = {
   latestSlides: {},
   promptApplyingSlides: {},
   generatingSlides: {},
+  // Vision audit state — stored separately from HTML strings so audit results
+  // survive navigation and approval. Both are index-keyed maps.
+  slideAudits: {},    // index → VisionAuditResult object (persisted in localStorage)
+  auditingSlides: {}, // index → jobToken (in-flight only, not persisted)
   currentIndex: 0,
   currentSlideHtml: '',
   status: 'IDLE', // IDLE | OUTLINING | GENERATING | REVIEWING | DONE

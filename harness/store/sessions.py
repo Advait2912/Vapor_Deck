@@ -9,8 +9,11 @@ def get_project_dir() -> Path:
 def get_session_path() -> Path:
     return get_project_dir() / "vapor_deck.json"
 
+import threading
+
 # In-memory cache
 sessions: dict[str, DeckSession] = {}
+_save_lock = threading.Lock()
 
 def _serialize(session: DeckSession) -> str:
     """Serialize a session to pretty-printed JSON (Pydantic v1 & v2 compatible)."""
@@ -39,16 +42,17 @@ def get_session(session_id: str) -> DeckSession:
     raise KeyError(f"Session '{session_id}' not found")
 
 def save_session(session: DeckSession) -> None:
-    sessions[session.session_id] = session
-
-    # Ensure project structure exists
-    project_dir = get_project_dir()
-    (project_dir / "slides").mkdir(parents=True, exist_ok=True)
-    (project_dir / "assets").mkdir(parents=True, exist_ok=True)
-
-    path = get_session_path()
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(_serialize(session))
+    with _save_lock:
+        sessions[session.session_id] = session
+    
+        # Ensure project structure exists
+        project_dir = get_project_dir()
+        (project_dir / "slides").mkdir(parents=True, exist_ok=True)
+        (project_dir / "assets").mkdir(parents=True, exist_ok=True)
+    
+        path = get_session_path()
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(_serialize(session))
 
 def delete_session(session_id: str) -> None:
     sessions.pop(session_id, None)
@@ -68,6 +72,16 @@ def delete_session(session_id: str) -> None:
                 os.remove(item)
             elif item.is_dir():
                 shutil.rmtree(item)
+
+    # 3. Clean up snapshot PNGs for this session
+    import glob
+    snapshot_dir = project_dir / "snapshots"
+    if snapshot_dir.exists():
+        for snap_file in glob.glob(str(snapshot_dir / f"{session_id}_slide_*.png")):
+            try:
+                os.remove(snap_file)
+            except OSError:
+                pass
 
 def list_sessions() -> list[str]:
     """Return all known session IDs (from file + memory)."""

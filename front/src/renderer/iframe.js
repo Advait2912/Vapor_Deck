@@ -84,7 +84,7 @@ export function buildBaseDocument(
   <!-- Prism Theme -->
   <link
     rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+    href="/lib/prism/prism-tomorrow.css"
   >
 
   <style>
@@ -136,6 +136,14 @@ export function buildBaseDocument(
       transform: translateY(0);
     }
 
+    /* Audit Mode: No animations */
+    body.audit-mode *,
+    body.audit-mode *::before,
+    body.audit-mode *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+
   </style>
 </head>
 
@@ -145,14 +153,12 @@ export function buildBaseDocument(
     ${slideHtml}
   </div>
 
-  <!-- Prism Core -->
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-
-  <!-- Prism Languages -->
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <!-- Prism Core & Languages -->
+  <script src="/lib/prism/prism.js"></script>
+  <script src="/lib/prism/components/prism-javascript.js"></script>
+  <script src="/lib/prism/components/prism-python.js"></script>
+  <script src="/lib/prism/components/prism-typescript.js"></script>
+  <script src="/lib/prism/components/prism-bash.js"></script>
 
   <script>
 
@@ -250,20 +256,21 @@ export function buildBaseDocument(
     // ─────────────────────────────────────────────────────────────
 
     window.__PATCH_SLIDE__ = function(newHtml) {
-
-      const scaler =
-        document.getElementById('slide-scaler');
-
+      const scaler = document.getElementById('slide-scaler');
       if (!scaler) return;
-
+      window.__VAPOR_READY__ = false;
       scaler.innerHTML = newHtml;
 
       requestAnimationFrame(() => {
         fitSlide();
       });
 
-      setTimeout(triggerReveal, 50);
-      setTimeout(highlightCode, 100);
+      setTimeout(() => {
+        triggerReveal();
+        highlightCode();
+        // Signal ready for audit after a small delay to ensure layout stability
+        setTimeout(() => { window.__VAPOR_READY__ = true; }, 50);
+      }, 50);
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -271,11 +278,14 @@ export function buildBaseDocument(
     // ─────────────────────────────────────────────────────────────
 
     window.addEventListener('load', function() {
-
+      window.__VAPOR_READY__ = false;
       fitSlide();
 
-      setTimeout(triggerReveal, 100);
-      setTimeout(highlightCode, 200);
+      setTimeout(() => {
+        triggerReveal();
+        highlightCode();
+        setTimeout(() => { window.__VAPOR_READY__ = true; }, 100);
+      }, 100);
     });
 
     window.addEventListener(

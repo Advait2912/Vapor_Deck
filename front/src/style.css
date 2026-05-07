@@ -225,6 +225,7 @@ main {
   background-size: 32px 32px;
   overflow: hidden;
   min-height: 0; /* Critical for flex child height handling */
+  position: relative; /* Fixed: ensure indicator is positioned relative to this container */
 }
 
 #slide-iframe {
@@ -446,3 +447,179 @@ footer {
   margin-bottom: 4px;
   opacity: 0.7;
 }
+/* Vision Indicator */
+.vision-indicator {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 100;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.vision-indicator:hover {
+  width: auto;
+  padding: 0 12px;
+  border-radius: 17px;
+  background: rgba(0, 0, 0, 0.85);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.vision-eye {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.vision-badge {
+  display: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.vision-indicator:hover .vision-badge {
+  display: block;
+}
+
+.vision-indicator.analyzing .vision-eye {
+  animation: pulse-eye 1.5s infinite;
+  color: var(--accent);
+}
+
+@keyframes pulse-eye {
+  0% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0.3; transform: scale(0.9); }
+}
+
+.vision-indicator.good {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.vision-indicator.good:hover {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.vision-indicator.issues, .vision-indicator.regenerate {
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fbbf24;
+}
+
+.vision-indicator.issues:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.vision-indicator.error {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+/* fixable = minor issues (blue-teal, between good and regenerate) */
+.vision-indicator.fixable {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+}
+
+.vision-indicator.fixable:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+/* ── Toast Notification System (Vision Audit auto-fix feedback) ──────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 56px; /* above the footer */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.audit-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  max-width: 520px;
+  pointer-events: all;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  animation: toast-slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.audit-toast-info {
+  background: rgba(14, 20, 30, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #e0f2fe;
+}
+
+.audit-toast-warning {
+  background: rgba(20, 15, 5, 0.92);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fef3c7;
+}
+
+.audit-toast-error {
+  background: rgba(20, 5, 5, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fee2e2;
+}
+
+.toast-msg {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+@keyframes toast-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast-fade-out {
+  animation: toast-fade 0.4s ease forwards;
+}
+
+@keyframes toast-fade {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+

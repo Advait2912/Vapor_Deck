@@ -164,18 +164,29 @@ export async function approveSlide(sessionId, slideIndex, html) {
  * If the backend doesn't have Playwright installed, gracefully returns { audit: { verdict: 'good' } }.
  */
 export async function takeSnapshot(sessionId, slideIndex, html) {
+  // 60-second timeout — Playwright + LLM audit can take 15-30s on slow hardware.
+  // Without this the indicator hangs on "ANALYZING..." forever if the server stalls.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
   try {
     const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/snapshot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, run_audit: true, auto_fix: true })
+      body: JSON.stringify({ html, run_audit: true, auto_fix: true }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!response.ok) {
-      // Snapshot is optional — fail gracefully
       return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
     }
     return response.json();
-  } catch {
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err?.name === 'AbortError') {
+      // Timed out — return a special flag so the UI can show "TIMED OUT"
+      return { snapshot_b64: null, audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 60 seconds'] }, fixed_html: null, auto_fixed: false };
+    }
     // Playwright may not be installed — that's fine
     return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
   }

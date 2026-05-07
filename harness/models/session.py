@@ -18,6 +18,8 @@ class SlideData(BaseModel):
     title: str
     html: str
     snapshot_b64: str | None = None
+    snapshot_url: str | None = None  # BUG 17: FS-based storage
+    audit: dict | None = None  # BUG 3: Persistent VisionAuditResult
     approved: bool = False
     status: str = "draft"  # draft | approved | refining
     metadata: dict = {}    # stores state, planning, etc.

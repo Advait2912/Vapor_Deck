@@ -64,12 +64,12 @@ VERDICT RULES:
 - "fixable": 1-2 minor issues that can be fixed with small CSS tweaks. Provide fix_instructions.
 - "regenerate": Major structural problems (overflow, clipping, broken layout). Better to regenerate.
 
-Be conservative — only flag "regenerate" for clearly broken slides.
+CRITICAL: Be extremely strict about OVERFLOW. If ANY text is cut off or extends beyond the visible slide boundaries, you MUST return "regenerate".
 """
 
 
 def build_vision_audit_prompt(html: str) -> str:
     """Build the vision audit prompt with the slide HTML snippet."""
-    # Truncate HTML for the prompt — we only need enough for context
-    html_snippet = html[:2000] if len(html) > 2000 else html
+    # BUG 7: Increased context for large slides
+    html_snippet = html[:5000] if len(html) > 5000 else html
     return VISION_AUDIT_PROMPT.format(html_snippet=html_snippet)

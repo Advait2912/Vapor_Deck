@@ -28,7 +28,8 @@ export const elements = {
   keepCurrentBtn: document.getElementById('keep-before-btn'),
   useRefinedBtn: document.getElementById('use-after-btn'),
   exportBtn: document.getElementById('export-btn'),
-  visionStatus: document.getElementById('vision-status'),
+  visionIndicator: document.getElementById('vision-indicator'),
+  visionBadge: document.querySelector('#vision-indicator .vision-badge'),
   projectPathDisplay: document.getElementById('project-path-display'),
   topicImageInput: document.getElementById('topic-image-input'),
   topicImageThumbs: document.getElementById('topic-image-thumbs'),
@@ -130,6 +131,60 @@ export function updateUI() {
     elements.confirmOutlineBtn.style.display = 'block';
   } else {
     elements.confirmOutlineBtn.style.display = 'none';
+  }
+
+  // Refresh Vision Indicator for current slide
+  refreshVisionIndicator();
+}
+
+function refreshVisionIndicator() {
+  const index = state.currentIndex;
+  const isAuditing = !!state.auditingSlides?.[index];
+  const audit = state.slideAudits?.[index];
+
+  // Default state: slide exists but has no audit result yet
+  elements.visionIndicator.style.display = 'flex';
+  elements.visionIndicator.className = 'vision-indicator';
+  elements.visionBadge.textContent = 'NOT AUDITED';
+  elements.visionIndicator.title = 'Slide has not been visually audited yet. Click to audit.';
+
+  // Show "ANALYZING..." only when a real audit request is in flight
+  if (isAuditing) {
+    elements.visionIndicator.className = 'vision-indicator analyzing';
+    elements.visionBadge.textContent = 'ANALYZING...';
+    elements.visionIndicator.title = 'Vision model is auditing layout...';
+    return;
+  }
+
+  // No audit result stored yet — leave at "NOT AUDITED"
+  if (!audit) return;
+
+  const verdict = audit.verdict || 'unknown';
+  const issues = audit.visual_issues || [];
+  const issueTitle = issues.length ? `Issues:\n• ${issues.join('\n• ')}` : '';
+
+  switch (verdict) {
+    case 'good':
+      elements.visionIndicator.className = 'vision-indicator good';
+      elements.visionBadge.textContent = 'LAYOUT OK';
+      elements.visionIndicator.title = 'Visual layout: stable and readable.';
+      break;
+    case 'fixable':
+      elements.visionIndicator.className = 'vision-indicator fixable';
+      elements.visionBadge.textContent = 'MINOR ISSUES';
+      elements.visionIndicator.title = issueTitle || 'Minor layout issues detected.';
+      break;
+    case 'regenerate':
+      elements.visionIndicator.className = 'vision-indicator regenerate';
+      elements.visionBadge.textContent = 'ISSUES FOUND';
+      elements.visionIndicator.title = issueTitle || 'Significant layout issues detected.';
+      break;
+    case 'audit_failed':
+    default:
+      elements.visionIndicator.className = 'vision-indicator error';
+      elements.visionBadge.textContent = 'AUDIT FAILED';
+      elements.visionIndicator.title = issues[0] || 'Audit engine error. Click to retry.';
+      break;
   }
 }
 
@@ -433,7 +488,7 @@ export function clearUI() {
   
   elements.statusText.textContent = 'IDLE';
   elements.slideProgress.textContent = 'Slide 0 / 0';
-  elements.visionStatus.style.display = 'none';
+  if (elements.visionIndicator) elements.visionIndicator.style.display = 'none';
   
   renderOutline();
   renderPlaceholder('Slide Preview Area');
