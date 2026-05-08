@@ -12,7 +12,6 @@ export const elements = {
   themeSelect: document.getElementById('theme-select'),
   modelSelect: document.getElementById('model-select'),
   newDeckBtn: document.getElementById('new-deck-btn'),
-  endSessionBtn: document.getElementById('end-session-btn'),
   customRegenBtn: document.getElementById('custom-regen-btn'),
   stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),
