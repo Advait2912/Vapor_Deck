@@ -1,152 +1,124 @@
-<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); padding: 2rem; position: relative; overflow: hidden;">
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg); color: var(--text); font-family: var(--font-body); padding: 2rem; overflow: hidden;">
   <style>
-    .slide-grid {
+    .slide {
+      position: relative;
+      background: radial-gradient(circle at top right, var(--accent-glow), transparent 40%);
+    }
+    .header {
+      font-family: var(--font-head);
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
+      margin-bottom: 3rem;
+      text-align: center;
+      width: 100%;
+      color: var(--text);
+    }
+    .comparison-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2rem;
+      gap: 3rem;
       width: 100%;
-      max-width: 1200px;
-      margin-top: 2rem;
+      max-width: 1100px;
     }
-    .slide-title {
-      font-family: var(--font-head);
-      font-size: clamp(2rem, 4vw, 3.5rem);
-      color: var(--text);
-      text-align: center;
-      margin-bottom: 1rem;
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
     }
-    .comparison-card {
+    .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 1rem;
       padding: 1.5rem;
-      box-shadow: 0 0 20px var(--accent-glow);
+      border-radius: 12px;
       transition: transform 0.3s ease;
     }
-    .card-header {
-      font-family: var(--font-head);
-      font-size: clamp(1.2rem, 2vw, 1.8rem);
-      color: var(--accent);
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--border);
-      padding-bottom: 0.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-5px);
     }
-    .point-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .point-item {
-      margin-bottom: 1rem;
-      font-size: clamp(0.9rem, 1.5vw, 1.2rem);
-      line-height: 1.5;
-      color: var(--text-muted);
-      display: flex;
-      align-items: flex-start;
-      gap: 0.5rem;
-    }
-    .point-item strong {
-      color: var(--text);
+    .label {
       display: block;
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
     }
-    .trilemma-footer {
-      margin-top: 3rem;
-      text-align: center;
-      padding: 1rem;
-      background: var(--code-bg);
-      border-radius: 0.5rem;
-      font-size: clamp(0.8rem, 1.2vw, 1rem);
+    .desc {
+      font-size: clamp(0.9rem, 1.1vw, 1.1rem);
       color: var(--text-muted);
-      border: 1px dashed var(--border);
-      max-width: 800px;
-      margin-left: auto;
-      margin-right: auto;
+      line-height: 1.4;
+    }
+    .column-title {
+      font-family: var(--font-head);
+      font-size: 1.5rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
     }
     .reveal {
       opacity: 0;
       transform: translateY(20px);
-      animation: revealIn 0.6s forwards;
+      animation: fadeInUp 0.6s forwards;
       animation-delay: var(--delay);
     }
-    @keyframes revealIn {
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    .badge {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      background: var(--accent);
-      color: var(--bg);
-      text-transform: uppercase;
-      font-weight: bold;
+    .divider {
+      position: absolute;
+      left: 50%;
+      top: 25%;
+      bottom: 10%;
+      width: 1px;
+      background: var(--border);
+      opacity: 0.5;
     }
   </style>
 
-  <h1 class="slide-title reveal visible" style="--delay: 0s">Solving the Scalability Trilemma</h1>
+  <h1 class="header reveal" style="--delay: 0s">The Shift: Narrow AI to AGI</h1>
 
-  <div class="slide-grid">
-    <!-- Left Column: Modular & Layered -->
-    <div class="comparison-card reveal visible" style="--delay: 0.2s">
-      <div class="card-header">
-        <span>Modular Approach</span>
-        <span class="badge">Decentralized</span>
+  <div class="comparison-grid">
+    <div class="column">
+      <div class="column-title reveal" style="--delay: 0.2s">Narrow AI (Specialized)</div>
+      
+      <div class="card reveal" style="--delay: 0.4s">
+        <span class="label">Task Focus</span>
+        <span class="desc">Optimized for single, defined functions like chess or image recognition.</span>
       </div>
-      <ul class="point-list">
-        <li class="point-item">
-          <div>
-            <strong>Ethereum &amp; Layer 2s</strong>
-            Offloads execution to Rollups (Optimism, Arbitrum) while retaining L1 security.
-          </div>
-        </li>
-        <li class="point-item">
-          <div>
-            <strong>Polkadot Parachains</strong>
-            Native interoperability via a Relay Chain, allowing specialized shards to scale independently.
-          </div>
-        </li>
-        <li class="point-item">
-          <div>
-            <strong>The Trade-off</strong>
-            Prioritizes <em>Security &amp; Decentralization</em>; accepts slight complexity in user experience (bridging).
-          </div>
-        </li>
-      </ul>
+      
+      <div class="card reveal" style="--delay: 0.6s">
+        <span class="label">Static Logic</span>
+        <span class="desc">Operates within fixed constraints and pre-defined datasets.</span>
+      </div>
+      
+      <div class="card reveal" style="--delay: 0.8s">
+        <span class="label">Tool Nature</span>
+        <span class="desc">Acts as a specialized utility for solving a specific problem.</span>
+      </div>
     </div>
 
-    <!-- Right Column: Monolithic & Integrated -->
-    <div class="comparison-card reveal visible" style="--delay: 0.4s">
-      <div class="card-header">
-        <span>Monolithic Approach</span>
-        <span class="badge">High Speed</span>
+    <div class="column">
+      <div class="column-title reveal" style="--delay: 0.3s">General AI (Emergent)</div>
+      
+      <div class="card reveal" style="--delay: 0.5s">
+        <span class="label">General Reasoning</span>
+        <span class="desc">Cross-domain synthesis allowing for flexible problem solving.</span>
       </div>
-      <ul class="point-list">
-        <li class="point-item">
-          <div>
-            <strong>Solana's Architecture</strong>
-            Single-state machine with Proof-of-History for massive throughput and sub-second finality.
-          </div>
-        </li>
-        <li class="point-item">
-          <div>
-            <strong>Layer 1 Scaling</strong>
-            Vertical scaling through high-spec hardware and optimized parallel execution (Sealevel).
-          </div>
-        </li>
-        <li class="point-item">
-          <div>
-            <strong>The Trade-off</strong>
-            Prioritizes <em>Speed &amp; Performance</em>; faces challenges in hardware accessibility for validators.
-          </div>
-        </li>
-      </ul>
+      
+      <div class="card reveal" style="--delay: 0.7s">
+        <span class="label">LLM Scale</span>
+        <span class="desc">Massive parameter growth enabling emergent cognitive capabilities.</span>
+      </div>
+      
+      <div class="card reveal" style="--delay: 0.9s">
+        <span class="label">Productivity Leaps</span>
+        <span class="desc">Generative AI transforms creators from executors to orchestrators.</span>
+      </div>
     </div>
   </div>
 
-  <div class="trilemma-footer reveal visible" style="--delay: 0.6s">
-    <strong>The Trilemma:</strong> Security ⬌ Speed ⬌ Decentralization. <br>
-    No single architecture solves all three perfectly; solutions are selected based on the specific use-case requirements.
-  </div>
+  <div class="divider"></div>
 </section>

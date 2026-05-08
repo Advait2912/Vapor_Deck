@@ -1,65 +1,116 @@
-<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 5% 8%; background-color: var(--bg); color: var(--text); font-family: var(--font-body);">
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: var(--font-body); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 4rem; position: relative; overflow: hidden;">
   <style>
     .slide {
-      position: relative;
-      overflow: hidden;
+      --gap: 2rem;
+      --accent-soft: rgba(var(--accent-rgb), 0.1);
+    }
+    .header-container {
+      text-align: center;
+      margin-bottom: 3rem;
     }
     .slide-title {
       font-family: var(--font-head);
-      font-size: clamp(2rem, 4vw, 3.5rem);
-      color: var(--accent);
-      margin-bottom: 2rem;
-      text-shadow: 0 0 20px var(--accent-glow);
-      border-left: 6px solid var(--accent);
-      padding-left: 1.5rem;
-    }
-    .bullet-container {
-      list-style: none;
-      padding: 0;
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
       margin: 0;
-      width: 100%;
-      max-width: 800px;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 2px;
     }
-    .bullet-item {
+    .mechanism-container {
       display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+      width: 100%;
+      max-width: 900px;
+      position: relative;
+    }
+    .step-card {
+      display: grid;
+      grid-template-columns: 120px 1fr;
       align-items: center;
-      font-size: clamp(1.1rem, 2.2vw, 1.8rem);
-      margin-bottom: 1.5rem;
-      padding: 1rem 1.5rem;
+      gap: 2rem;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      padding: 1.5rem;
+      border-radius: 12px;
       transition: transform 0.3s ease, border-color 0.3s ease;
+      position: relative;
     }
-    .bullet-item:hover {
-      transform: translateX(10px);
+    .step-card:hover {
       border-color: var(--accent);
+      transform: translateX(10px);
     }
-    .bullet-item::before {
-      content: '→';
-      color: var(--accent);
-      margin-right: 1rem;
+    .step-number {
+      font-family: var(--font-head);
+      font-size: 2rem;
       font-weight: bold;
+      color: var(--accent);
+      text-align: center;
+      border-right: 2px solid var(--border);
+    }
+    .step-content h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.25rem;
+      color: var(--text);
+    }
+    .step-content p {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1.4;
     }
     .reveal {
       opacity: 0;
       transform: translateY(20px);
-      transition: all 0.6s ease-out;
+      animation: slideIn 0.6s forwards ease-out;
+      animation-delay: var(--delay);
     }
-    .reveal.visible {
-      opacity: 1;
-      transform: translateY(0);
+    @keyframes slideIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .connector {
+      position: absolute;
+      left: 60px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--accent), var(--border));
+      z-index: -1;
     }
   </style>
 
-  <h1 class="slide-title reveal visible" style="--delay: 0.1s">The Horizon: AI and Interoperability</h1>
-  
-  <ul class="bullet-container">
-    <li class="bullet-item reveal visible" style="--delay: 0.3s">Integration of AI for automated DAO governance</li>
-    <li class="bullet-item reveal visible" style="--delay: 0.5s">Cross-chain communication protocols</li>
-    <li class="bullet-item reveal visible" style="--delay: 0.7s">Tokenization of real-world assets (RWA)</li>
-    <li class="bullet-item reveal visible" style="--delay: 0.9s">The move toward a seamless 'Internet of Blockchains'</li>
-  </ul>
+  <div class="header-container reveal" style="--delay: 0.1s">
+    <h1 class="slide-title">Future Career Landscapes</h1>
+  </div>
 
-  
+  <div class="mechanism-container">
+    <div class="connector"></div>
+    
+    <div class="step-card reveal" style="--delay: 0.3s">
+      <div class="step-number">01</div>
+      <div class="step-content">
+        <h3>Shift in Core Competency</h3>
+        <p>Transitioning from manual syntax coding to strategic prompt engineering and architectural orchestration.</p>
+      </div>
+    </div>
+
+    <div class="step-card reveal" style="--delay: 0.5s">
+      <div class="step-number">02</div>
+      <div class="step-content">
+        <h3>AI-Augmented Roles</h3>
+        <p>Emergence of "Centaur" professionals who blend domain expertise with AI acceleration for 10x productivity.</p>
+      </div>
+    </div>
+
+    <div class="step-card reveal" style="--delay: 0.7s">
+      <div class="step-number">03</div>
+      <div class="step-content">
+        <h3>Continuous Adaptation</h3>
+        <p>Shifting from "once-in-a-lifetime" education to lifelong learning cycles in a rapidly automating economy.</p>
+      </div>
+    </div>
+  </div>
 </section>

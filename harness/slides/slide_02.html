@@ -1,113 +1,122 @@
-<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;">
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; background-color: var(--bg); color: var(--text); font-family: var(--font-body); position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 3rem;">
   <style>
     .slide {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      display: grid;
-      grid-template-rows: auto 1fr;
-      padding: clamp(2rem, 5vh, 5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
       gap: 2rem;
-      overflow: hidden;
     }
-
     .slide-header {
-      text-align: left;
+      border-left: 4px solid var(--accent);
+      padding-left: 1.5rem;
     }
-
-    .slide-header h1 {
+    .slide-title {
       font-family: var(--font-head);
-      font-size: clamp(1.8rem, 4vw, 3.5rem);
-      color: var(--accent);
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
       margin: 0;
-      text-shadow: 0 0 15px var(--accent-glow);
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-
-    .slide-content {
+    .content-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: 1fr 1fr;
       gap: 2rem;
+      flex-grow: 1;
       align-items: start;
     }
-
     .concept-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 1rem;
+      border-radius: 12px;
       padding: 1.5rem;
+      height: fit-content;
       position: relative;
       transition: transform 0.3s ease;
     }
-
     .concept-card:hover {
       border-color: var(--accent);
       transform: translateY(-5px);
     }
-
-    .concept-card h2 {
+    .card-title {
       font-family: var(--font-head);
-      font-size: clamp(1.2rem, 2vw, 1.8rem);
+      font-size: clamp(1.1rem, 2vw, 1.4rem);
       color: var(--accent);
-      margin-top: 0;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-
-    .concept-card p {
-      font-size: clamp(0.9rem, 1.5vw, 1.1rem);
-      line-height: 1.6;
+    .point-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .point-item {
+      font-size: clamp(0.9rem, 1.1vw, 1.1rem);
+      margin-bottom: 1rem;
+      padding-left: 1.2rem;
+      position: relative;
+      line-height: 1.4;
       color: var(--text-muted);
     }
-
+    .point-item::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+    .highlight-box {
+      grid-column: span 2;
+      background: linear-gradient(90deg, var(--surface), transparent);
+      border-left: 4px solid var(--accent-glow);
+      padding: 1rem 1.5rem;
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
     .reveal {
       opacity: 0;
       transform: translateY(20px);
-      animation: fadeInUp 0.6s forwards;
+      animation: revealIn 0.6s forwards;
       animation-delay: var(--delay);
     }
-
-    @keyframes fadeInUp {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .tag {
-      display: inline-block;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      background: var(--accent-glow);
-      color: var(--text);
-      padding: 2px 8px;
-      border-radius: 4px;
-      margin-bottom: 1rem;
+    @keyframes revealIn {
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 
-  <div class="slide-header">
-    <h1 class="reveal visible" style="--delay: 0.1s">Foundations of Blockchain Architecture</h1>
-  </div>
+  <header class="slide-header reveal" style="--delay: 0.1s">
+    <h1 class="slide-title">Foundations of Machine Learning</h1>
+  </header>
 
-  <div class="slide-content">
-    <div class="concept-card reveal visible" style="--delay: 0.3s">
-      <span class="tag">Data Integrity</span>
-      <h2>Immutable Ledgers</h2>
-      <p>Cryptographic hashing ensures that once data is written to a block, it cannot be altered without changing every subsequent block. This creates a verifiable, permanent history of transactions.</p>
-      <p><strong>Core:</strong> SHA-256 • Merkle Trees • Chain-of-Trust</p>
+  <div class="content-grid">
+    <div class="concept-card reveal" style="--delay: 0.3s">
+      <div class="card-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        Learning Paradigms
+      </div>
+      <ul class="point-list">
+        <li class="point-item"><strong>Supervised:</strong> Learning from labeled data to predict outcomes.</li>
+        <li class="point-item"><strong>Unsupervised:</strong> Identifying hidden patterns in unlabeled data.</li>
+        <li class="point-item"><strong>Semi-Supervised:</strong> Combining small labeled sets with large unlabeled pools.</li>
+      </ul>
     </div>
 
-    <div class="concept-card reveal visible" style="--delay: 0.5s">
-      <span class="tag">Network Layer</span>
-      <h2>P2P Networking</h2>
-      <p>Distributed nodes maintain the ledger without a central authority. Gossiping protocols ensure state synchronization across the globe with high fault tolerance.</p>
-      <p><strong>Core:</strong> Node Discovery • Gossip Protocols • Decentralization</p>
+    <div class="concept-card reveal" style="--delay: 0.5s">
+      <div class="card-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Neural Architectures
+      </div>
+      <ul class="point-list">
+        <li class="point-item"><strong>Neural Networks:</strong> Mimicking biological neurons to process information.</li>
+        <li class="point-item"><strong>Deep Learning:</strong> Using multi-layered networks for complex feature extraction.</li>
+        <li class="point-item"><strong>Weights & Biases:</strong> Mathematical parameters adjusted during training.</li>
+      </ul>
     </div>
 
-    <div class="concept-card reveal visible" style="--delay: 0.7s">
-      <span class="tag">Consensus Evolution</span>
-      <h2>The PoW to PoS Shift</h2>
-      <p>Moving from computationally expensive Proof-of-Work (mining) to Proof-of-Stake (validators) drastically reduces the carbon footprint and energy requirements.</p>
-      <p><strong>Impact:</strong> &gt;99% energy reduction • Higher Scalability • Sustainable Growth</p>
+    <div class="highlight-box reveal" style="--delay: 0.7s">
+      <strong>The Fuel: Big Data</strong> — The efficacy of deep learning is directly proportional to the volume and quality of data available for model training, enabling the transition from rule-based systems to pattern-recognition intelligence.
     </div>
   </div>
 </section>

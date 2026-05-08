@@ -1,83 +1,85 @@
-<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); text-align: center; position: relative; overflow: hidden;">
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg); color: var(--text); font-family: var(--font-body); overflow: hidden; position: relative;">
   <style>
     .slide {
-      --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-glow));
+      position: relative;
+      text-align: center;
       padding: 2rem;
     }
-    .hero-container {
-      position: relative;
-      z-index: 10;
+    .hero-content {
+      z-index: 2;
       max-width: 900px;
-      width: 100%;
     }
-    .hero-title {
+    .title {
       font-family: var(--font-head);
-      font-size: clamp(2rem, 5vw, 4.5rem);
+      font-size: clamp(2rem, 4vw, 3.5rem);
       line-height: 1.1;
       margin-bottom: 1.5rem;
-      background: var(--accent-gradient);
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       font-weight: 800;
     }
-    .hero-subtitle {
-      font-size: clamp(1rem, 2vw, 1.5rem);
+    .subtitle {
+      font-size: clamp(1.1rem, 1.8vw, 1.5rem);
       color: var(--text-muted);
+      line-height: 1.6;
       max-width: 700px;
       margin: 0 auto 2rem auto;
-      line-height: 1.6;
     }
-    .hero-pill {
-      display: inline-block;
-      padding: 0.5rem 1.2rem;
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      font-size: clamp(0.7rem, 1.2vw, 1rem);
-      color: var(--accent);
-      background: rgba(var(--accent), 0.1);
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      margin-bottom: 2rem;
-    }
-    .decorative-ring {
+    .deco-ring {
       position: absolute;
-      border: 1px solid var(--border);
+      width: 500px;
+      height: 500px;
+      border: 1px solid var(--accent);
       border-radius: 50%;
-      opacity: 0.3;
-      pointer-events: none;
-      animation: rotate 20s linear infinite;
+      opacity: 0.2;
+      filter: blur(2px);
+      animation: pulse 8s infinite ease-in-out;
+      z-index: 1;
     }
-    @keyframes rotate {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+    .deco-ring-2 {
+      position: absolute;
+      width: 700px;
+      height: 700px;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      opacity: 0.1;
+      filter: blur(4px);
+      animation: pulse 12s infinite ease-in-out reverse;
+      z-index: 1;
     }
     .reveal {
       opacity: 0;
       transform: translateY(20px);
-      animation: fadeInUp 0.8s ease forwards;
+      animation: revealIn 0.8s forwards cubic-bezier(0.22, 1, 0.36, 1);
       animation-delay: var(--delay);
     }
-    @keyframes fadeInUp {
+    @keyframes revealIn {
       to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.2; }
+      50% { transform: scale(1.1) rotate(180deg); opacity: 0.3; }
+    }
+    .accent-bar {
+      width: 60px;
+      height: 4px;
+      background: var(--accent);
+      margin: 0 auto 2rem auto;
+      box-shadow: 0 0 15px var(--accent-glow);
     }
   </style>
 
-  <!-- Decorative Elements -->
-  <div class="decorative-ring" style="width: 80vh; height: 80vh; top: calc(50% - 40vh); left: calc(50% - 40vh);"></div>
-  <div class="decorative-ring" style="width: 60vh; height: 60vh; top: calc(50% - 30vh); left: calc(50% - 30vh); animation-direction: reverse;"></div>
+  <div class="deco-ring"></div>
+  <div class="deco-ring-2"></div>
 
-  <div class="hero-container">
-    <div class="reveal hero-pill visible" style="--delay: 0.2s">
-      Engineering the Decentralized Web
+  <div class="hero-content">
+    <div class="reveal" style="--delay: 0.2s">
+      <div class="accent-bar"></div>
     </div>
-    
-    <h1 class="reveal hero-title visible" style="--delay: 0.4s">
-      Blockchain Development and Future Scope
-    </h1>
-    
-    <p class="reveal hero-subtitle visible" style="--delay: 0.6s">
-      Exploring the evolution of decentralized ledger technology to bridge the gap between code and commerce. 
-      A strategic roadmap for the next generation of developers and investors.
+    <h1 class="title reveal" style="--delay: 0.4s">AI/ML: Architecting the Future of Intelligence</h1>
+    <p class="subtitle reveal" style="--delay: 0.6s">
+      Exploring the convergence of machine learning and intelligent automation to forge a new era of human-machine synergy.
     </p>
   </div>
 </section>

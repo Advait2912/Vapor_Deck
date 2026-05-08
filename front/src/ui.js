@@ -13,7 +13,6 @@ export const elements = {
   modelSelect: document.getElementById('model-select'),
   newDeckBtn: document.getElementById('new-deck-btn'),
   endSessionBtn: document.getElementById('end-session-btn'),
-  approveBtn: document.getElementById('approve-btn'),
   customRegenBtn: document.getElementById('custom-regen-btn'),
   stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),

@@ -866,6 +866,12 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
       status: 'ready'
     });
     state.latestSlides[index] = html;
+
+    // ── AUTOMATIC EXPORT SNAPSHOT ──────────────────────────────────────────
+    // Since the "Approve" button is removed, we capture the snapshot for the
+    // PDF exporter as soon as the slide is stable and audited.
+    state.exportSnapshots[index] = stripFences(html);
+    console.log(`[Export] Auto-snapshot updated for slide ${index + 1}`);
     delete state.draftSlides[index];
     
     persistSessionViewState();
@@ -1374,14 +1380,14 @@ function _captureCurrentSlideFromIframe() {
 
 async function handleExport() {
   if (!state.sessionId || !state.outline.length) {
-    alert('No slides to export. Please generate and approve some slides first.');
+    alert('No slides to export. Please generate some slides first.');
     return;
   }
 
   // Check how many slides have been approved (have export snapshots)
   const snapshotCount = Object.keys(state.exportSnapshots).length;
   if (snapshotCount === 0) {
-    alert('No approved slides to export. Approve at least one slide first.');
+    alert('No slides are ready for export. Wait for generation to finish.');
     return;
   }
 
