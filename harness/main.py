@@ -109,11 +109,13 @@ from routes.session import router as session_router
 from routes.upload import router as upload_router
 from routes.slide import router as slide_router
 from routes.snapshot import router as snapshot_router
+from routes.assets import router as assets_router
 
 app.include_router(session_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
 app.include_router(slide_router, prefix="/api")
 app.include_router(snapshot_router, prefix="/api")
+app.include_router(assets_router, prefix="/api")
 
 # ── Static Files ──────────────────────────────────────────────────────────────
 from fastapi.staticfiles import StaticFiles
@@ -122,3 +124,9 @@ from store.sessions import get_project_dir
 snapshot_dir = get_project_dir() / "snapshots"
 os.makedirs(snapshot_dir, exist_ok=True)
 app.mount("/api/snapshots", StaticFiles(directory=str(snapshot_dir)), name="snapshots")
+
+# Phase 3 — Local Assets (Content Images)
+assets_dir = get_project_dir() / "assets"
+os.makedirs(assets_dir, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+

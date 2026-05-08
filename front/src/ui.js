@@ -29,8 +29,6 @@ export const elements = {
   visionIndicator: document.getElementById('vision-indicator'),
   visionBadge: document.querySelector('#vision-indicator .vision-badge'),
   projectPathDisplay: document.getElementById('project-path-display'),
-  topicImageInput: document.getElementById('topic-image-input'),
-  topicImageThumbs: document.getElementById('topic-image-thumbs'),
   refinePanel: document.getElementById('refine-panel'),
   refineInstructionInput: document.getElementById('refine-instruction-input'),
   refineImageInput: document.getElementById('refine-image-input'),
@@ -45,6 +43,12 @@ export const elements = {
   // Mode pill buttons
   modePillPlan: document.getElementById('interaction-mode-plan'),
   modePillBuild: document.getElementById('interaction-mode-build'),
+  // Design Reference upload (Phase 1)
+  designRefInput: document.getElementById('design-ref-input'),
+  designRefBtn: document.getElementById('design-ref-btn'),
+  designRefPanel: document.getElementById('design-ref-panel'),
+  designRefThumbs: document.getElementById('design-ref-thumbs'),
+  designRefSignal: document.getElementById('design-ref-signal'),
 };
 
 /**
@@ -523,6 +527,7 @@ export function renderOutlineContentSummary(target = null) {
 }
 
 export function renderImageThumbs(files, target) {
+  if (!target) return;
   target.innerHTML = '';
   files.slice(0, 8).forEach(file => {
     const img = document.createElement('img');
@@ -541,10 +546,12 @@ export function clearUI() {
   elements.refineInstructionInput.value = '';
   elements.promptInput.disabled = false;
   
-  if (elements.topicImageInput) elements.topicImageInput.value = '';
   if (elements.refineImageInput) elements.refineImageInput.value = '';
-  elements.topicImageThumbs.innerHTML = '';
+  if (elements.designRefInput) elements.designRefInput.value = '';
   elements.refineImageThumbs.innerHTML = '';
+  if (elements.designRefThumbs) elements.designRefThumbs.innerHTML = '';
+  if (elements.designRefSignal) elements.designRefSignal.innerHTML = '';
+  if (elements.designRefPanel) elements.designRefPanel.style.display = 'none';
   
   if (elements.chatHistory) elements.chatHistory.innerHTML = '';
   elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';

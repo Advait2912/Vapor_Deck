@@ -6,6 +6,7 @@ from .input_unit import InputUnit
 
 
 class OutlineItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     index: int
     title: str
     intent: str  # title-hero | explain-concept | explain-mechanism | show-example | compare | list-points | code-walkthrough | summary
@@ -14,6 +15,7 @@ class OutlineItem(BaseModel):
 
 
 class SlideData(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     index: int
     title: str
     html: str

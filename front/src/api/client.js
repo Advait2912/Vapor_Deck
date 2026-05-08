@@ -137,14 +137,31 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const token = line.slice(6);
-        if (token === '[DONE]') return;
-        if (token.startsWith('[ERROR]')) throw new Error(token.slice(8));
-        yield token;
+
+    // Process all full events in the buffer
+    let eventEnd;
+    while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
+      const event = buffer.slice(0, eventEnd);
+      buffer = buffer.slice(eventEnd + 2);
+
+      // In SSE, an event can have multiple 'data: ' lines
+      const lines = event.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const b64Token = line.slice(6);
+          if (b64Token === '[DONE]') return;
+          if (b64Token.startsWith('[ERROR]')) throw new Error(b64Token.slice(8));
+          
+          try {
+            // Decode Base64 token to UTF-8 string
+            const token = decodeURIComponent(escape(atob(b64Token)));
+            yield token;
+          } catch (e) {
+            console.error('Failed to decode Base64 token:', b64Token, e);
+            // Fallback for non-base64 tokens (like [DONE] if it wasn't caught)
+            yield b64Token;
+          }
+        }
       }
     }
   }
@@ -249,6 +266,12 @@ export async function addOutlineSlide(sessionId, slide) {
 export async function removeOutlineSlide(sessionId, slideN) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/${slideN}`, {
     method: 'DELETE'
+  });
+  return response.json();
+}
+export async function retryAnalysis(sessionId, unitId) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/input/${unitId}/retry_analysis`, {
+    method: 'POST'
   });
   return response.json();
 }

@@ -50,6 +50,7 @@
 
       <main>
         <div id="preview-container">
+          <div id="slide-loading-bar"><div id="slide-loading-fill"></div></div>
           <iframe id="slide-iframe" frameborder="0"></iframe>
           <div id="vision-indicator" class="vision-indicator">
             <span class="vision-eye">👁</span>
@@ -83,6 +84,11 @@
                 placeholder="# slides"
                 style="width:56px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); border-radius:3px; padding:4px 6px; font-size:0.75rem; font-family:inherit; text-align:center;"
               />
+              <!-- Design Reference trigger: hidden input + icon button -->
+              <input id="design-ref-input" type="file" accept="image/*" multiple style="display:none;" />
+              <button id="design-ref-btn" class="btn icon-btn" title="Upload a brand image or design reference — the AI will read the visual language from it">
+                🎨
+              </button>
               <button id="generate-btn" class="btn primary send-btn">Send</button>
             </div>
           </div>
@@ -99,6 +105,11 @@
             <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
           </div>
 
+        </div>
+        <!-- Design Reference signal card — shown after a successful upload, hidden otherwise -->
+        <div id="design-ref-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 8px 16px; gap: 10px; align-items: flex-start; flex-wrap: wrap;">
+          <div id="design-ref-thumbs" class="thumb-strip" style="flex-shrink:0;"></div>
+          <div id="design-ref-signal" style="flex:1; min-width: 160px; font-size:0.72rem; color: var(--text-muted); line-height:1.55; display:flex; flex-direction:column; gap:4px;"></div>
         </div>
         <div id="refine-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 10px 20px;">
           <div id="refine-image-thumbs" class="thumb-strip"></div>

@@ -29,21 +29,6 @@ const safePrismPy = _esc(prismPy);
 const safePrismTS = _esc(prismTS);
 const safePrismBash = _esc(prismBash);
 
-// ── Buffer state for streaming ────────────────────────────────────────────────
-
-const _buffers = new Map();
-
-function _getBuffer(iframeId) {
-  if (!_buffers.has(iframeId)) {
-    _buffers.set(iframeId, {
-      pending: false,
-      accumulated: '',
-      generation: 0,  // incremented on clear; stale timers compare against this
-    });
-  }
-  return _buffers.get(iframeId);
-}
-
 // ── Core iframe initialization ────────────────────────────────────────────────
 
 export function renderSlideInIframe(
@@ -299,100 +284,6 @@ function patchExistingIframe(
 
     iframe.dataset.initialized = 'true';
   }
-}
-
-// ── Streaming ─────────────────────────────────────────────────────────────────
-
-export function appendStreamToken(
-  iframe,
-  token,
-  theme = 'dark-tech',
-  iframeId = 'main'
-) {
-  const buf = _getBuffer(iframeId);
-  buf.accumulated += token;
-
-  if (!buf.pending) {
-    buf.pending = true;
-    const scheduledGeneration = buf.generation;
-
-    setTimeout(() => {
-      // Discard if clearStreamBuffer() was called since we scheduled
-      // (means the user navigated away or a new generation started)
-      if (!_buffers.has(iframeId)) return;
-      const current = _buffers.get(iframeId);
-      if (current.generation !== scheduledGeneration) return;
-
-      _patchIframe(iframe, current.accumulated, theme);
-      current.pending = false;
-    }, 200);
-  }
-}
-
-export function finalizeStream(
-  iframe,
-  theme = 'dark-tech',
-  iframeId = 'main'
-) {
-  const buf = _buffers.get(iframeId);
-  // If the buffer was already cleared (navigation happened), don't patch
-  if (!buf) return;
-
-  const capturedGeneration = buf.generation;
-  buf.pending = false;
-
-  if (buf.accumulated) {
-    // Double-check generation hasn't moved since we started
-    if (_buffers.has(iframeId) && _buffers.get(iframeId).generation === capturedGeneration) {
-      _patchIframe(iframe, buf.accumulated, theme);
-    }
-  }
-
-  _buffers.delete(iframeId);
-}
-
-export function clearStreamBuffer(
-  iframeId = 'main'
-) {
-  // Increment generation so any in-flight 200ms timers self-discard
-  const existing = _buffers.get(iframeId);
-  if (existing) {
-    existing.generation++;
-    existing.accumulated = '';
-    existing.pending = false;
-  }
-  // Also remove so _getBuffer starts fresh on next generation
-  _buffers.delete(iframeId);
-}
-
-// ── Internal patch handler ────────────────────────────────────────────────────
-
-function _patchIframe(
-  iframe,
-  html,
-  theme
-) {
-
-  if (
-    !iframe ||
-    !html?.trim()
-  ) {
-    return;
-  }
-
-  if (
-    !html.includes('<section') &&
-    !html.includes('<div') &&
-    !html.includes('<style')
-  ) {
-    return;
-  }
-
-  patchExistingIframe(
-    iframe,
-    html,
-    theme
-  );
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

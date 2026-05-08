@@ -9,9 +9,6 @@
 
 export {
   renderSlideInIframe as mountSlide,
-  appendStreamToken as streamToken,
-  finalizeStream as finalizeSlide,
-  clearStreamBuffer,
   renderPlaceholderInIframe as mountPlaceholder,
   buildSlideDocument,
   validateSlideHtml,

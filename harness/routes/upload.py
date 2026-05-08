@@ -179,3 +179,50 @@ async def list_inputs(session_id: str):
         ],
         "total_tokens": sum(u.token_budget for u in session.input_units),
     }
+
+
+@router.post("/session/{session_id}/input/{unit_id}/retry_analysis")
+async def retry_analysis(session_id: str, unit_id: str):
+    """Manually retry vision analysis for an existing image input unit."""
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    unit = next((u for u in session.input_units if u.unit_id == unit_id), None)
+    if not unit:
+        raise HTTPException(status_code=404, detail="Input unit not found")
+
+    if unit.role != "design_style":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only design_style units can be re-analyzed (unit role is '{unit.role}')"
+        )
+
+    if not unit.raw_path or not os.path.exists(unit.raw_path):
+        raise HTTPException(status_code=400, detail="Raw asset file not found on disk")
+
+    vision_model = get_model(session.vision_model)
+    
+    with open(unit.raw_path, "rb") as f:
+        raw_bytes = f.read()
+
+    # Re-run extraction
+    new_unit = await extract_image(session_id, raw_bytes, unit.filename, vision_model)
+    
+    # Update existing unit with new signals
+    unit.visual_summary = new_unit.visual_summary
+    unit.layout_hints = new_unit.layout_hints
+    unit.font_hints = new_unit.font_hints
+    unit.color_palette = new_unit.color_palette
+    
+    save_session(session)
+    
+    return {
+        "status": "ok",
+        "design_signals": {
+            "visual_summary": unit.visual_summary,
+            "color_palette": unit.color_palette,
+            "font_hints": unit.font_hints,
+        }
+    }

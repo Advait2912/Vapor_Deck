@@ -128,6 +128,19 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
     except Exception as e:
         logger.error(f"[{session_id}] Failed to save slide {n} files: {e}")
 
+    # Phase 2 — Self-Contained CSS: save a standalone version with theme CSS
+    # embedded inline so it renders correctly without the Vite dev server.
+    try:
+        from store.sessions import get_project_dir as _gpd
+        from services.theme_compiler import make_standalone_html
+        _slides_dir = _gpd() / "slides"
+        standalone_html = make_standalone_html(req.html, session.theme)
+        with open(_slides_dir / f"slide_{n:02d}_standalone.html", "w", encoding="utf-8") as f:
+            f.write(standalone_html)
+        logger.info(f"[{session_id}] slide {n} standalone file saved (theme={session.theme})")
+    except Exception as e:
+        logger.warning(f"[{session_id}] Failed to save standalone slide {n}: {e}")
+
     # Trigger background deck-context update
     asyncio.create_task(_update_context_in_background(session_id, req.html, session.text_model))
 

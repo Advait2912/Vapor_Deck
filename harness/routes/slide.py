@@ -5,6 +5,7 @@ POST /api/session/{id}/slide/{n}          — generate slide N via SSE stream
 POST /api/session/{id}/slide/{n}/approve  — approve and advance
 POST /api/session/{id}/slide/{n}/refine   — refine current slide (Day 2)
 """
+import base64
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ai.router import get_model
-from store.sessions import get_session, save_session
+from store.sessions import get_session, save_session, get_project_dir
 from models.session import SlideData, OutlineItem
 from services.stream_utils import collect_stream, strip_fences, validate_slide_html
 from services.context_synthesis import get_relevant_chunks
@@ -38,7 +39,12 @@ async def _update_context_in_background(session_id: str, html: str, model_name: 
             CONTEXT_UPDATE_SYSTEM
         )
         updated_ctx = json.loads(strip_fences(raw_ctx))
-        updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
+        # Flatten synthesis to prevent recursive nesting madness
+        old_synthesis = session.deck_context.get("synthesis", {})
+        if isinstance(old_synthesis, dict):
+            # Merge keys instead of nesting the whole dict
+            updated_ctx.update({k: v for k, v in old_synthesis.items() if k not in updated_ctx})
+        
         session.deck_context = updated_ctx
         save_session(session)
     except Exception as e:
@@ -133,22 +139,30 @@ async def session_chat(session_id: str, req: ChatRequest):
         data = json.loads(strip_fences(raw_response))
         updates = data.get("updates", [])
         
-        # Track which indices we've seen to handle additions vs updates
-        existing_indices = {item.index for item in session.outline}
+        # Smart Merge: Match updates to existing items to preserve IDs
+        # 1. Map existing items by title for lookup
+        existing_items_by_title = {item.title: item for item in session.outline}
+        existing_items_by_index = {item.index: item for item in session.outline}
         
         for update in updates:
             idx = update.get("index")
-            if idx is None:
-                continue
-                
-            if idx in existing_indices:
-                # UPDATE existing
-                for item in session.outline:
-                    if item.index == idx:
-                        if "title" in update: item.title = str(update["title"])
-                        if "intent" in update: item.intent = str(update["intent"])
-                        if "key_points" in update: item.key_points = list(update["key_points"])
-                        if "layout_hint" in update: item.layout_hint = str(update["layout_hint"])
+            title = update.get("title")
+            if idx is None: continue
+
+            # Try to find match by title first (most stable bridge when AI reorders)
+            target_item = existing_items_by_title.get(title)
+            
+            # If not found by title, maybe it's an update to an existing index
+            if not target_item:
+                target_item = existing_items_by_index.get(idx)
+            
+            if target_item:
+                # UPDATE existing: preserve ID, update fields
+                if "title" in update: target_item.title = str(update["title"])
+                if "intent" in update: target_item.intent = str(update["intent"])
+                if "key_points" in update: target_item.key_points = list(update["key_points"])
+                if "layout_hint" in update: target_item.layout_hint = str(update["layout_hint"])
+                target_item.index = idx  # Update to new suggested index
             else:
                 # ADD new slide
                 new_item = OutlineItem(
@@ -162,8 +176,22 @@ async def session_chat(session_id: str, req: ChatRequest):
         
         # Always re-sort and re-number to ensure consistency
         session.outline.sort(key=lambda x: (x.index or 999))
+        
+        # Build a mapping of titles/IDs to new indices to help sync content
+        id_to_new_index = {}
+        title_to_new_index = {}
         for i, item in enumerate(session.outline):
-            item.index = i + 1
+            new_idx = i + 1
+            id_to_new_index[item.id] = new_idx
+            title_to_new_index[item.title] = new_idx
+            item.index = new_idx
+            
+        # Re-sync session.slides indices so content follows the outline
+        for slide in session.slides:
+            if slide.id in id_to_new_index:
+                slide.index = id_to_new_index[slide.id]
+            elif slide.title in title_to_new_index:
+                slide.index = title_to_new_index[slide.title]
         
         save_session(session)
         return {
@@ -202,13 +230,16 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
     if not slide_spec:
         raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
 
-    # Check if slide already exists and is approved or has content
-    existing = next((s for s in session.slides if s.index == n), None)
+    # Check if slide already exists (use ID for stable mapping, fallback to index)
+    existing = next((s for s in session.slides if s.id == slide_spec.id), None)
+    if not existing:
+        existing = next((s for s in session.slides if s.index == n), None)
+    
     if existing and existing.html and not force:
         logger.info(f"[{session_id}] slide {n} already exists, streaming from cache")
         async def cached_stream():
-            safe = existing.html.replace("\n", "\\n")
-            yield f"data: {safe}\n\n"
+            b64_html = base64.b64encode(existing.html.encode("utf-8")).decode("utf-8")
+            yield f"data: {b64_html}\n\n"
             yield "data: [DONE]\n\n"
         
         return StreamingResponse(
@@ -229,6 +260,10 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
             max_tokens=1500,
         )
 
+        # Get available local assets
+        asset_dir = get_project_dir() / "assets"
+        asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
         prompt = build_slide_prompt(
             n=n,
             total=len(session.outline),
@@ -239,6 +274,7 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
             theme=session.theme,
             deck_context=session.deck_context,
             relevant_chunks=relevant,
+            asset_filenames=asset_filenames,
         )
 
         if os.getenv("DEBUG_PROMPTS", "0") == "1":
@@ -258,8 +294,9 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
                     SLIDE_SYSTEM,
                 ):
                     if token:
-                        # Standard flat SSE
-                        yield f"data: {token}\n\n"
+                        # Use Base64 to prevent ANY character-level corruption in SSE
+                        b64_token = base64.b64encode(token.encode("utf-8")).decode("utf-8")
+                        yield f"data: {b64_token}\n\n"
                 
                 yield "data: [DONE]\n\n"
             except Exception as e:
@@ -304,6 +341,7 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
         )
 
     slide_data = SlideData(
+        id=slide_spec.id,
         index=n,
         title=slide_spec.title,
         html=req.html,
@@ -340,6 +378,20 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
         logger.info(f"[{session_id}] slide {n} files saved to {slide_path.parent}")
     except Exception as e:
         logger.error(f"[{session_id}] failed to save slide {n} files: {e}")
+
+    # Phase 2 — Self-Contained CSS: save a portable standalone version with
+    # the theme CSS embedded inline. Written alongside the bare fragment so
+    # the file renders correctly when opened outside the Vite dev server.
+    try:
+        from store.sessions import get_project_dir as _gpd
+        from services.theme_compiler import make_standalone_html
+        _slides_dir = _gpd() / "slides"
+        standalone_html = make_standalone_html(req.html, session.theme)
+        with open(_slides_dir / f"slide_{n:02d}_standalone.html", "w", encoding="utf-8") as f:
+            f.write(standalone_html)
+        logger.info(f"[{session_id}] slide {n} standalone file saved (theme={session.theme})")
+    except Exception as e:
+        logger.warning(f"[{session_id}] failed to save standalone slide {n}: {e}")
 
     logger.info(
         f"[{session_id}] slide {n} approved. "
@@ -378,6 +430,7 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
     slide_data = next((s for s in session.slides if s.index == n), None)
     if not slide_data:
         slide_data = SlideData(
+            id=slide_spec.id,
             index=n,
             title=slide_spec.title,
             html=req.current_html or "",
@@ -442,7 +495,9 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
                 SLIDE_SYSTEM,
             ):
                 if token:
-                    yield f"data: {token}\n\n"
+                    # Use Base64 to prevent ANY character-level corruption in SSE
+                    b64_token = base64.b64encode(token.encode("utf-8")).decode("utf-8")
+                    yield f"data: {b64_token}\n\n"
             
             yield "data: [DONE]\n\n"
         except Exception as e:

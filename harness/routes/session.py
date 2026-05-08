@@ -27,6 +27,28 @@ from prompts.context_update import initial_deck_context
 logger = logging.getLogger("session")
 router = APIRouter()
 
+def sync_session_indices(session: DeckSession):
+    """Ensure slide content (HTML) follows the outline's new order using IDs (stable) or titles (fallback)."""
+    # Map IDs to new indices
+    id_to_new_index = {item.id: item.index for item in session.outline}
+    title_to_new_index = {item.title: item.index for item in session.outline}
+    
+    # Update indices in the slides array
+    for slide in session.slides:
+        if slide.id in id_to_new_index:
+            slide.index = id_to_new_index[slide.id]
+        elif slide.title in title_to_new_index:
+            # Fallback for old sessions without IDs
+            slide.index = title_to_new_index[slide.title]
+            # Capture the ID from the outline for future stability
+            outline_item = next((it for it in session.outline if it.title == slide.title), None)
+            if outline_item:
+                slide.id = outline_item.id
+    
+    # Sort slides by their new indices
+    session.slides.sort(key=lambda x: x.index)
+
+
 
 # ── Request models ─────────────────────────────────────────────────────────────
 
@@ -195,18 +217,36 @@ async def confirm_outline(session_id: str, req: ConfirmOutlineRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session.outline = req.outline
+    # Smart Merge: Preserve existing IDs if titles match
+    existing_items = {item.title: item.id for item in session.outline}
+    
+    new_outline = []
+    for item in req.outline:
+        # If the incoming item has no ID or its ID isn't in our current outline,
+        # but the title matches an existing item, preserve the old ID.
+        if item.title in existing_items:
+            item.id = existing_items[item.title]
+        new_outline.append(item)
+    
+    session.outline = new_outline
     session.current_index = 0
 
+    # Build initial deck context (metadata)
     ctx = session.deck_context
-    session.deck_context = initial_deck_context(
+    new_ctx = initial_deck_context(
         topic=session.topic,
         theme=session.theme,
         total_slides=len(session.outline),
         audience=ctx.get("audience", "general"),
         tone=ctx.get("tone", "professional"),
     )
-    session.deck_context["synthesis"] = ctx
+    
+    # Merge existing synthesis data into the top level to keep it flat
+    for k, v in ctx.items():
+        if k not in new_ctx:
+            new_ctx[k] = v
+            
+    session.deck_context = new_ctx
     session.status = "generating"
     save_session(session)
 
@@ -339,6 +379,7 @@ async def add_slide_to_outline(session_id: str, req: AddSlideRequest):
         item["index"] = i + 1
 
     session.outline = [OutlineItem(**item) for item in outline_list]
+    sync_session_indices(session)
     save_session(session)
 
     logger.info(f"[{session_id}] slide added: '{req.title}' at position {new_index}")
@@ -388,6 +429,7 @@ async def reorder_outline(session_id: str, req: ReorderRequest):
         item.index = i + 1
 
     session.outline = new_outline
+    sync_session_indices(session)
     save_session(session)
 
     logger.info(f"[{session_id}] outline reordered: {req.order}")
@@ -430,7 +472,8 @@ async def remove_slide_from_outline(session_id: str, n: int):
     # Re-number remaining slides
     for i, item in enumerate(session.outline):
         item.index = i + 1
-
+    
+    sync_session_indices(session)
     save_session(session)
 
     logger.info(f"[{session_id}] slide {n} removed from outline")

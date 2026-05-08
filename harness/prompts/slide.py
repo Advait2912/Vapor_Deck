@@ -29,18 +29,23 @@ Layout hint: {layout_hint}
 === RELEVANT REFERENCE CONTENT (draw from this if helpful) ===
 {relevant_chunks}
 
+{asset_list}
+{brand_section}
 === STYLE RULES ===
 Theme: {theme}
-NEVER use hardcoded colors OR hardcoded pixel sizes for the overall slide dimensions.
 NEVER set width/height in px on the .slide element — it must fill its container fluidly.
-ONLY CSS custom properties for all colors:
-  --bg, --surface, --text, --text-muted, --accent, --accent-glow,
-  --code-bg, --border, --font-head, --font-body
+All colours MUST be expressed through CSS custom properties — never use raw hex or rgb() on HTML elements directly.
+Available variables: --bg, --surface, --text, --text-muted, --accent, --accent-glow, --code-bg, --border, --font-head, --font-body
+
+If a BRAND ENFORCEMENT section appears above:
+  → You MUST add a `section.slide {{ }}` block at the VERY TOP of your <style> tag that redefines these variables with the brand palette.
+  → This is not optional. Every element that uses var(--accent), var(--bg) etc. will automatically inherit the brand colours.
+  → The section-scoped override takes priority over the global theme without breaking any other slide.
 
 === OUTPUT RULES ===
 1. Return ONLY the <section class="slide"> element — no wrapping HTML, no doctype
 2. The .slide element MUST use:
-     width: 100%; height: 100%; 
+     width: 100%; height: 100%;
      min-height: 100vh;
      box-sizing: border-box;
    NO fixed pixel dimensions on the root slide element.
@@ -82,6 +87,87 @@ INTENT_GUIDANCE = {
 }
 
 
+def _build_brand_section(style_intent: dict, topic: str = "") -> str:
+    """
+    Build a MANDATORY BRAND ENFORCEMENT or THEMATIC STYLING prompt block.
+
+    If brand signals exist, it enforces them. If not, it instructs the LLM
+    to infer a palette based on the topic.
+    """
+    palette      = style_intent.get("extracted_palette", [])
+    fonts        = style_intent.get("extracted_fonts", [])
+    color_notes  = style_intent.get("color_notes", "")
+    layout_pref  = style_intent.get("layout_preference", "")
+
+    # Case A: Brand signals exist
+    if palette or color_notes:
+        lines = [
+            "",
+            "=== BRAND ENFORCEMENT (MANDATORY — apply to this slide) ===",
+            "A design reference image was uploaded. The following visual identity MUST be reflected in this slide.",
+            "Failure to apply these overrides means the slide does not match the client's brand.",
+            "",
+        ]
+        if palette:
+            palette_str = ", ".join(palette[:6])
+            lines += [
+                f"Extracted colour palette: {palette_str}",
+                "",
+                "REQUIRED ACTION — at the VERY TOP of your <style> block, before any other rules, add:",
+                "  section.slide {",
+                "    --bg:          <darkest palette colour — slide background>;",
+                "    --surface:     <second-darkest — panel / card backgrounds>;",
+                "    --accent:      <most vibrant / saturated brand colour — buttons, highlights>;",
+                "    --accent-glow: <rgba() version of accent at 0.3 opacity — glow effects>;",
+                "    --text:        <lightest colour readable as foreground text>;",
+                "    --text-muted:  <muted text, 60–70% opacity blend of --text>;",
+                "    --border:      <low-opacity palette colour for dividers and outlines>;",
+                "  }",
+            ]
+        if color_notes:
+            lines += [f"Colour intent from brand analysis: {color_notes}"]
+    
+    # Case B: No brand signals — infer from topic
+    else:
+        lines = [
+            "",
+            "=== THEMATIC STYLING (MANDATORY — apply to this slide) ===",
+            f"Topic: {topic}",
+            "No design reference was provided. You MUST infer a custom professional colour palette",
+            "that fits the mood and subject of this topic.",
+            "",
+            "REQUIRED ACTION — at the VERY TOP of your <style> block, redefine the theme variables:",
+            "  section.slide {",
+            "    --bg:          <thematic background colour>;",
+            "    --surface:     <thematic panel/card background>;",
+            "    --accent:      <thematic accent colour (vibrant/saturated)>;",
+            "    --accent-glow: <rgba() version of accent at 0.3 opacity>;",
+            "    --text:        <readable text colour (high contrast against --bg)>;",
+            "    --text-muted:  <lower opacity text>;",
+            "    --border:      <divider/border colour>;",
+            "  }",
+            "Choose a palette that feels premium and industry-appropriate for the subject matter.",
+        ]
+
+    if fonts:
+        font_list = ", ".join(f"'{f}'" for f in fonts[:3])
+        lines += [
+            "",
+            f"Font guidance: prefer {font_list} where available as system fonts.",
+        ]
+
+    if layout_pref:
+        lines += ["", f"Layout directive: {layout_pref}"]
+
+    lines += [
+        "",
+        "CRITICAL: The section.slide { } variable overrides are MANDATORY. Do NOT fall back to default theme colours.",
+        "=== END STYLING SECTION ===\n",
+    ]
+
+    return "\n".join(lines)
+
+
 def build_slide_prompt(
     n: int,
     total: int,
@@ -92,11 +178,23 @@ def build_slide_prompt(
     theme: str,
     deck_context: dict,
     relevant_chunks: str = "",
+    asset_filenames: list[str] | None = None,
 ) -> str:
-    # Summarize deck context to avoid token bloat
-    ctx_summary = _summarize_context(deck_context)
+    # Summarize deck context (narrative / terms / facts) — brand signals are
+    # now handled by _build_brand_section, NOT included here to avoid duplication.
+    ctx_summary  = _summarize_context(deck_context)
     key_points_str = "\n".join(f"- {p}" for p in key_points)
-    guidance = INTENT_GUIDANCE.get(intent, "Follow the intent as described.")
+    guidance     = INTENT_GUIDANCE.get(intent, "Follow the intent as described.")
+
+    # Extract brand signals from deck_context (look in 'synthesis' for Phase 1 output)
+    synthesis = deck_context.get("synthesis", {})
+    style_intent = synthesis.get("style_intent", deck_context.get("style_intent", {}))
+    topic = synthesis.get("topic", deck_context.get("topic", ""))
+    
+    brand_section = _build_brand_section(style_intent, topic)
+
+    # Format the asset list section
+    asset_section = _build_asset_section(asset_filenames)
 
     return SLIDE_PROMPT.format(
         n=n,
@@ -108,34 +206,61 @@ def build_slide_prompt(
         deck_context_summary=ctx_summary or "This is the first slide.",
         relevant_chunks=relevant_chunks or "No reference content available.",
         theme=theme,
+        brand_section=brand_section,
+        asset_list=asset_section,
         intent_guidance=guidance,
     )
 
 
+def _build_asset_section(filenames: list[str] | None) -> str:
+    """Format the list of available local image assets for the prompt."""
+    if not filenames:
+        return ""
+    
+    asset_lines = [
+        "=== AVAILABLE LOCAL ASSETS ===",
+        "These images are stored locally in the project's assets/ folder.",
+        "To include one in this slide, use exactly: <img src=\"/assets/filename\">",
+        "Only use an image if it is directly relevant to this slide's content.",
+        "",
+        "Available filenames:"
+    ]
+    for f in filenames:
+        asset_lines.append(f" - {f}")
+    
+    asset_lines.append("=== END ASSETS ===\n")
+    return "\n".join(asset_lines)
+
+
 def _summarize_context(ctx: dict) -> str:
+    """
+    Summarise the running deck narrative, defined terms, and facts already stated.
+    Brand/design signals are intentionally excluded here — they live in the
+    dedicated BRAND ENFORCEMENT section built by _build_brand_section().
+    """
     if not ctx:
         return ""
     lines = []
-    
+
     # Handle nested structure (from initial_deck_context)
     inner_ctx = ctx.get("context", ctx)
-    
+
     slides = ctx.get("slides_summary", [])
     if slides:
         lines.append("Slides covered so far:")
         for s in slides:
             lines.append(f"  Slide {s['index']}: {s['title']} — covered: {', '.join(s.get('covered', []))}")
-    
+
     terms = inner_ctx.get("key_terms_defined", [])
     if terms:
         lines.append(f"Terms already defined: {', '.join(terms)}")
-    
+
     facts = inner_ctx.get("facts_stated", [])
     if facts:
         lines.append(f"Facts already stated: {'; '.join(facts[:3])}")
-    
+
     narrative = inner_ctx.get("running_narrative", "")
     if narrative and narrative != "Presentation not yet started.":
         lines.append(f"Narrative so far: {narrative}")
-    
+
     return "\n".join(lines)

@@ -38,6 +38,7 @@ import {
   sendPlanChat,
   takeSnapshot,
   addOutlineSlide,
+  retryAnalysis,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -46,7 +47,7 @@ import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
 
 // ── New modules ────────────────────────────────────────────────────────────────
-import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer } from './renderer/index.js';
+import { mountSlide, mountPlaceholder } from './renderer/index.js';
 import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
 import { renderGlobalControls, globalState, addSlideToOutline, reorderSlides } from './ui/global_control.js';
 import { buildBaseDocument } from './renderer/iframe.js';
@@ -60,8 +61,8 @@ import {
   resetComparison,
 } from './ui/comparison.js';
 
-let pendingTopicImages = [];
 let pendingRefineImages = [];
+let pendingDesignRefImages = [];
 let lastRefinedHtml = '';
 const activeSlideControllers = new Map();
 let activeRefineController = null;
@@ -89,6 +90,26 @@ function refreshInfoPanel() {
 }
 // Expose so ui.js can call it from updateUI without a circular import
 window.refreshInfoPanel = refreshInfoPanel;
+
+function showLoadingBar() {
+  const bar = document.getElementById('slide-loading-bar');
+  if (!bar) return;
+  bar.classList.remove('done', 'fade-out');
+  bar.classList.add('running');
+}
+
+function hideLoadingBar() {
+  const bar = document.getElementById('slide-loading-bar');
+  if (!bar) return;
+  bar.classList.remove('running');
+  bar.classList.add('done');
+  setTimeout(() => {
+    bar.classList.add('fade-out');
+    setTimeout(() => {
+      bar.classList.remove('done', 'fade-out');
+    }, 400);
+  }, 500);
+}
 
 /**
  * Helper to render the outline with all necessary callbacks and state.
@@ -322,8 +343,8 @@ async function init() {
 
   setupEventListeners({
     onStartGeneration: startGeneration,
-    onTopicImagesSelected: handleTopicImagesSelected,
     onRefineImagesSelected: handleRefineImagesSelected,
+    onDesignRefSelected: handleDesignRefSelected,
     onExport: handleExport,
     onConfirmOutline: handleConfirmOutline,
     onRefine: startRefinement,
@@ -532,8 +553,8 @@ async function handleNewDeck() {
   const oldSessionId = state.sessionId;
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
-  pendingTopicImages = [];
   pendingRefineImages = [];
+  pendingDesignRefImages = [];
   updateState({
     sessionId: null, outline: [], slides: [], messages: [],
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
@@ -570,9 +591,13 @@ async function startGeneration(prompt) {
     elements.generateBtn.textContent = 'Uploading...';
     updateUI();
     await uploadText(state.sessionId, prompt, 'topic');
-    for (const image of pendingTopicImages) {
-      await uploadFile(state.sessionId, image, 'reference');
+    
+    // Upload any pending design references queued before the session existed
+    for (const image of pendingDesignRefImages) {
+      const result = await uploadFile(state.sessionId, image, 'design_style');
+      _renderDesignRefSignal([image], result);
     }
+    pendingDesignRefImages = [];
 
     elements.generateBtn.textContent = 'Synthesizing...';
     await synthesize(state.sessionId);
@@ -609,6 +634,7 @@ async function handleConfirmOutline() {
 
     // Sanitize the outline payload to match the backend OutlineItem schema strictly
     const sanitizedOutline = state.outline.map(item => ({
+      id: item.id,
       index: item.index,
       title: item.title,
       intent: item.intent,
@@ -694,11 +720,6 @@ async function handlePlanChat(message) {
 
 // ── Outline Navigation ───────────────────────────────────────────────────────────
 function navigateToSlide(index) {
-  // Invalidate any pending streaming timer for the previous slide.
-  // This bumps the buffer's generation counter so deferred 200ms timers
-  // self-discard rather than patching the iframe after we've moved away.
-  clearStreamBuffer('main');
-
   state.currentIndex = index;
 
   if (state.status === 'REVIEWING_OUTLINE') {
@@ -794,7 +815,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
 
   if (index === state.currentIndex) {
     mountPlaceholder(elements.slideIframe, `Generating Slide ${slideNum}: ${slideTitle}...`);
-    clearStreamBuffer('main');
+    showLoadingBar();
   }
 
   let slideHtml = '';
@@ -804,20 +825,15 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   try {
     const stream = streamSlide(state.sessionId, slideNum, 'generate', { force }, controller.signal);
     for await (const token of stream) {
-      const t = token.replace(/\\n/g, '\n');
+      const t = token;
       slideHtml += t;
-      // Use new buffered renderer for the active slide
-      if (index === state.currentIndex && runToken === sessionRunToken) {
-        streamToken(elements.slideIframe, t, state.theme, 'main');
-      }
     }
 
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (!slideHtml.trim()) throw new Error('Empty slide response from backend');
 
-    // Finalize the stream
     if (index === state.currentIndex) {
-      finalizeSlide(elements.slideIframe, state.theme, 'main');
+      hideLoadingBar();
     }
 
     state.draftSlides[index] = slideHtml;
@@ -1186,7 +1202,7 @@ async function startRefinement(mode, instruction = '') {
       activeRefineController.signal
     );
     for await (const token of stream) {
-      const t = token.replace(/\\n/g, '\n');
+      const t = token;
       refinedHtml += t;
       appendComparisonToken(t);
     }
@@ -1204,14 +1220,142 @@ async function startRefinement(mode, instruction = '') {
   }
 }
 
-function handleTopicImagesSelected(files) {
-  pendingTopicImages = files;
-  renderImageThumbs(files, elements.topicImageThumbs);
-}
-
 function handleRefineImagesSelected(files) {
   pendingRefineImages = files;
   renderImageThumbs(files, elements.refineImageThumbs);
+}
+
+/**
+ * Design Reference Upload handler.
+ * Shows thumbnails immediately. If a session already exists, uploads at once
+ * and renders the extracted style signals. Otherwise queues the files so
+ * startGeneration() picks them up after the session is created.
+ */
+async function handleDesignRefSelected(files) {
+  if (!files.length) return;
+
+  // Always show thumbs immediately for instant feedback
+  renderImageThumbs(files, elements.designRefThumbs);
+  elements.designRefPanel.style.display = 'flex';
+
+  if (!state.sessionId) {
+    // No session yet — queue the files; startGeneration uploads them
+    pendingDesignRefImages = files;
+    _renderDesignRefSignal(files, null); // preview mode
+    return;
+  }
+
+  // Session exists — upload immediately
+  pendingDesignRefImages = [];
+  let lastResult = null;
+  for (const file of files) {
+    try {
+      lastResult = await uploadFile(state.sessionId, file, 'design_style');
+    } catch (err) {
+      console.warn('Design ref upload failed:', err);
+    }
+  }
+  _renderDesignRefSignal(files, lastResult);
+}
+
+/**
+ * Render the signal confirmation card below the thumbs strip.
+ * @param {File[]} files      - the uploaded files
+ * @param {object|null} result - the backend upload response (or null = queued/preview)
+/**
+ * Render the signal confirmation card below the thumbs strip.
+ * @param {File[]} files      - the uploaded files
+ * @param {object|null} result - the backend upload response (or null = queued/preview)
+ *
+ * NOTE: we never use inline onclick here — unit_id is stored in data-unit-id
+ * and wired with addEventListener to avoid injection risks.
+ */
+function _renderDesignRefSignal(files, result) {
+  const signal = elements.designRefSignal;
+  if (!signal) return;
+
+  if (!result) {
+    // Queued before session exists
+    signal.innerHTML = `
+      <div class="design-ref-badge" style="color:var(--accent);">🎨 ${files.length} Reference${files.length > 1 ? 's' : ''} Queued</div>
+      <div style="font-size: 0.7rem; opacity: 0.8;">Style signals will be extracted upon topic submission.</div>
+    `;
+    return;
+  }
+
+  const ds = result.design_signals;
+  const isFailed = ds?.visual_summary?.toLowerCase().includes('failed');
+  const unitId = result.unit_id || '';
+
+  if (!ds || isFailed) {
+    signal.innerHTML = `
+      <div class="design-ref-badge" style="background:rgba(255,100,100,0.1); color:#ff6b6b;">⚠️ Vision Analysis Failed</div>
+      <div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 8px;">The visual style could not be extracted automatically.</div>
+      <button class="retry-analysis-btn" data-unit-id="">
+        <span>🔄 Retry Analysis</span>
+      </button>
+    `;
+    // Wire retry button safely — no inline onclick, no global function call
+    const retryBtn = signal.querySelector('.retry-analysis-btn');
+    if (retryBtn) {
+      retryBtn.dataset.unitId = unitId;
+      retryBtn.addEventListener('click', () => handleRetryDesignAnalysis(retryBtn.dataset.unitId));
+    }
+    return;
+  }
+
+  // Render palette swatches + summary
+  const palette = (ds.color_palette || []).slice(0, 6);
+  const swatches = palette.map(hex =>
+    `<div class="swatch" title="${hex}" style="background:${hex};"></div>`
+  ).join('');
+
+  const fonts = (ds.font_hints || []).join(', ') || '—';
+  const summary = ds.visual_summary || '';
+
+  signal.innerHTML = `
+    <div class="design-ref-badge" style="background:rgba(100,255,150,0.1); color:#2ecc71;">✅ Design Reference Analyzed</div>
+    ${summary ? `<div style="color:var(--text-main); font-size:0.75rem; font-weight: 500;">${summary}</div>` : ''}
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      ${palette.length ? `<div class="swatch-grid">${swatches}</div>` : ''}
+      ${fonts !== '—' ? `<div style="font-size:0.65rem; opacity:0.7;">Fonts: ${fonts}</div>` : ''}
+      <div style="margin-top: 4px;">
+        <button class="retry-analysis-btn" data-unit-id=""
+          style="background:transparent; border:none; padding:0; font-size:0.6rem; color:var(--text-muted); cursor:pointer; text-decoration:underline;">
+          Re-analyze
+        </button>
+      </div>
+    </div>
+  `;
+  // Wire re-analyze button safely
+  const reanalyzeBtn = signal.querySelector('.retry-analysis-btn');
+  if (reanalyzeBtn) {
+    reanalyzeBtn.dataset.unitId = unitId;
+    reanalyzeBtn.addEventListener('click', () => handleRetryDesignAnalysis(reanalyzeBtn.dataset.unitId));
+  }
+}
+
+async function handleRetryDesignAnalysis(unitId) {
+  if (!state.sessionId || !unitId) return;
+  
+  const signal = elements.designRefSignal;
+  const originalHtml = signal.innerHTML;
+  
+  try {
+    signal.innerHTML = `<div class="design-ref-badge" style="color:var(--accent);">⌛ Re-analyzing...</div>`;
+    const result = await retryAnalysis(state.sessionId, unitId);
+    // Pass [] for files — we don't have the original File objects after the fact,
+    // but the renderer handles that gracefully.
+    _renderDesignRefSignal([], { ...result, unit_id: unitId });
+  } catch (err) {
+    console.error('Retry analysis failed:', err);
+    signal.innerHTML = originalHtml;
+    // Re-wire the buttons that were just restored
+    const btn = signal.querySelector('.retry-analysis-btn');
+    if (btn && btn.dataset.unitId) {
+      btn.addEventListener('click', () => handleRetryDesignAnalysis(btn.dataset.unitId));
+    }
+  }
 }
 
 function regenerateCurrentSlide() {
@@ -1245,7 +1389,7 @@ async function customRegenerateWithPrompt() {
   updateUI();
   persistSessionViewState();
   mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${slideNum}...`);
-  clearStreamBuffer('main');
+  if (index === state.currentIndex) showLoadingBar();
 
   let regenerated = '';
   activeRefineController = new AbortController();
@@ -1257,12 +1401,8 @@ async function customRegenerateWithPrompt() {
     }, activeRefineController.signal);
 
     for await (const token of stream) {
-      const t = token.replace(/\\n/g, '\n');
+      const t = token;
       regenerated += t;
-      // Only stream to the live iframe if the user is still on this slide
-      if (index === state.currentIndex && runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
-        streamToken(elements.slideIframe, t, state.theme, 'main');
-      }
     }
 
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
@@ -1272,7 +1412,7 @@ async function customRegenerateWithPrompt() {
     state.latestSlides[index] = regenerated;
     delete state.promptApplyingSlides[index];
     if (state.currentIndex === index) {
-      finalizeSlide(elements.slideIframe, state.theme, 'main');
+      hideLoadingBar();
       state.currentSlideHtml = regenerated;
       state.status = 'REVIEWING';
       mountSlide(elements.slideIframe, regenerated, state.theme);

@@ -7,8 +7,8 @@ import { elements } from './ui.js';
 export function setupEventListeners(actions) {
   const { 
     onStartGeneration, 
-    onTopicImagesSelected,
     onRefineImagesSelected,
+    onDesignRefSelected,
     onExport, 
     onConfirmOutline, 
     onApproveSlide, 
@@ -71,15 +71,19 @@ export function setupEventListeners(actions) {
     onExport();
   });
 
-  if (elements.topicImageInput) {
-    elements.topicImageInput.addEventListener('change', (e) => {
-      onTopicImagesSelected?.(Array.from(e.target.files || []));
-    });
-  }
-
   if (elements.refineImageInput) {
     elements.refineImageInput.addEventListener('change', (e) => {
       onRefineImagesSelected?.(Array.from(e.target.files || []));
+    });
+  }
+
+  // Design Reference upload — button opens hidden file input; change fires callback
+  if (elements.designRefBtn && elements.designRefInput) {
+    elements.designRefBtn.addEventListener('click', () => {
+      elements.designRefInput.click();
+    });
+    elements.designRefInput.addEventListener('change', (e) => {
+      onDesignRefSelected?.(Array.from(e.target.files || []));
     });
   }
 
