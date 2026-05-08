@@ -218,48 +218,22 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
 <head>
   <link rel="stylesheet" href="/themes/${state.theme}.css">
   <style>
-    html, body {
+    html {
       margin: 0; padding: 0;
       width: 100%; height: 100%;
-      overflow: hidden;
       background: #000;
+      overflow: hidden;
     }
-    #slide-scaler {
-      transform-origin: top left;
-      /* scale applied by JS below */
+    body {
+      overflow: hidden;
     }
   </style>
 </head>
 <body>
-  <div id="slide-scaler">${html}</div>
+  ${html}
   <script>
-    function fitSlide() {
-      const scaler = document.getElementById('slide-scaler');
-      if (!scaler) return;
-      const slide = scaler.firstElementChild;
-      if (!slide) return;
-      // Use the slide's natural rendered size (or declared CSS size)
-      const naturalW = slide.scrollWidth  || slide.offsetWidth  || 1280;
-      const naturalH = slide.scrollHeight || slide.offsetHeight || 720;
-      const scaleX = window.innerWidth  / naturalW;
-      const scaleY = window.innerHeight / naturalH;
-      const scale  = Math.min(scaleX, scaleY);
-      scaler.style.transform = 'scale(' + scale + ')';
-      // Centre the scaled content
-      const scaledW = naturalW * scale;
-      const scaledH = naturalH * scale;
-      scaler.style.marginLeft = ((window.innerWidth  - scaledW) / 2) + 'px';
-      scaler.style.marginTop  = ((window.innerHeight - scaledH) / 2) + 'px';
-    }
-    // Run after layout and on resize
-    window.addEventListener('load', fitSlide);
-    window.addEventListener('resize', fitSlide);
-    // Also run immediately in case load already fired
-    if (document.readyState === 'complete') fitSlide();
-    // Trigger reveal animations
     setTimeout(() => {
       document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
-      fitSlide();
     }, 80);
   </script>
 </body>

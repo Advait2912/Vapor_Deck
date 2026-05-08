@@ -165,19 +165,18 @@ main {
   background-image: radial-gradient(circle at center, #1a1a1a 1px, transparent 1px);
   background-size: 32px 32px;
   overflow: hidden;
-  min-height: 0; /* Critical for flex child height handling */
+  position: relative; /* For absolutely centering the scaled iframe */
 }
 
 #slide-iframe {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 16 / 9;
+  width: 1280px;
+  height: 720px;
   border: 1px solid var(--border);
   background: #000;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
   border-radius: 4px;
+  position: absolute;
+  transform-origin: center center;
 }
 
 /* Controls Bar (Above Footer) */
@@ -282,3 +281,9 @@ input[type="text"]:focus {
   border-color: var(--accent) !important;
   box-shadow: 0 0 10px var(--accent-glow);
 }
+
+/*
+  Print styles are injected dynamically by handleExport() in main.js.
+  The export opens a new window with a dedicated print document,
+  so no @media print rules are needed here for the main app.
+*/

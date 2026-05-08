@@ -1,0 +1,264 @@
+{
+  "session_id": "9c6911e3-43bd-4969-9824-b28258ce9246",
+  "status": "done",
+  "text_model": "ollama/gemma4:31b-cloud",
+  "vision_model": "google/gemini-2.0-flash",
+  "theme": "dark-tech",
+  "input_units": [
+    {
+      "unit_id": "3aef57f5-c76b-4f44-a88e-b5f3d5ef2665",
+      "session_id": "9c6911e3-43bd-4969-9824-b28258ce9246",
+      "file_hash": "41a40ce559efc5c2ef875e217a3935895b13efe9deb6308fa8c5667c02f66f3e",
+      "input_type": "text",
+      "role": "topic",
+      "filename": null,
+      "raw_path": null,
+      "chunks": [
+        {
+          "chunk_id": "7049bf46",
+          "text": "global warming",
+          "token_count": 3,
+          "source_page": null
+        }
+      ],
+      "token_budget": 3,
+      "visual_summary": null,
+      "layout_hints": [],
+      "color_palette": [],
+      "font_hints": [],
+      "instructions_parsed": [],
+      "created_at": "2026-05-08T00:08:42.248382+00:00"
+    }
+  ],
+  "input_hash_index": {
+    "41a40ce559efc5c2ef875e217a3935895b13efe9deb6308fa8c5667c02f66f3e": "3aef57f5-c76b-4f44-a88e-b5f3d5ef2665"
+  },
+  "topic": "Global Warming: Challenges and Solutions",
+  "derived_color_palette": [],
+  "derived_font_hints": [],
+  "hard_constraints": [],
+  "deck_context": {
+    "deck": {
+      "title": "Global Warming: Challenges and Solutions",
+      "theme": "dark-tech",
+      "total_slides": 7,
+      "audience": "General public and students",
+      "tone": "Informative and urgent"
+    },
+    "context": {
+      "key_terms_defined": [
+        "Circular economy"
+      ],
+      "concepts_covered": [
+        "Reforestation",
+        "Carbon capture technologies",
+        "Circular economy principles",
+        "Systemic policy change",
+        "International treaties",
+        "Call to action"
+      ],
+      "facts_stated": [
+        "Reforestation and carbon capture are pathways to sustainability",
+        "Circular economy principles can eliminate waste",
+        "Binding international treaties are necessary for systemic change"
+      ],
+      "running_narrative": "The presentation has transitioned from identifying the problems of global warming to proposing specific, systemic pathways toward a sustainable future, culminating in a final call to action for the audience."
+    },
+    "slides_summary": [
+      {
+        "index": 1,
+        "title": "Pathways to a Sustainable Future",
+        "covered": [
+          "Reforestation",
+          "Carbon capture",
+          "Circular economy",
+          "International policy"
+        ],
+        "layout_style": "Interactive list with reveal animations"
+      },
+      {
+        "index": 2,
+        "title": "Conclusion: A Call to Action",
+        "covered": [
+          "Key takeaways",
+          "Final call to action"
+        ],
+        "layout_style": "Grid layout with takeaways box and CTA section"
+      }
+    ],
+    "synthesis": {
+      "topic": "Global Warming: Challenges and Solutions",
+      "audience": "General public and students",
+      "tone": "Informative and urgent",
+      "key_themes": [
+        "Causes of global warming",
+        "Environmental impact",
+        "Climate change consequences",
+        "Mitigation and adaptation strategies",
+        "Sustainable future"
+      ],
+      "key_facts": [
+        "Rise in global average temperatures",
+        "Increase in greenhouse gas emissions",
+        "Melting polar ice caps and sea-level rise",
+        "Increased frequency of extreme weather events"
+      ],
+      "narrative_arc": "The presentation moves from explaining the scientific causes of global warming to illustrating its devastating effects, concluding with actionable solutions to mitigate the crisis.",
+      "hard_constraints": [],
+      "style_intent": {
+        "suggested_theme": "clean-light",
+        "color_notes": "A palette of earth tones, blues, and warning reds",
+        "layout_preference": "Visual-heavy with clear data visualizations and impactful imagery",
+        "extracted_palette": [],
+        "extracted_fonts": []
+      },
+      "input_unit_count": 1,
+      "reference_tokens_used": 0
+    }
+  },
+  "outline": [
+    {
+      "index": 1,
+      "title": "Global Warming: Challenges and Solutions",
+      "intent": "title-hero",
+      "key_points": [
+        "Urgency of the climate crisis",
+        "Overview of global temperature rise",
+        "Call to action for a sustainable future"
+      ],
+      "layout_hint": "hero-centered"
+    },
+    {
+      "index": 2,
+      "title": "The Mechanics of Greenhouse Emissions",
+      "intent": "explain-mechanism",
+      "key_points": [
+        "The greenhouse effect process",
+        "Primary sources of CO2 and Methane",
+        "Correlation between emissions and warming"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 3,
+      "title": "Environmental Impact and Cascading Effects",
+      "intent": "show-example",
+      "key_points": [
+        "Melting polar ice caps",
+        "Accelerated sea-level rise",
+        "Loss of critical biodiversity"
+      ],
+      "layout_hint": "single-column"
+    },
+    {
+      "index": 4,
+      "title": "Extreme Weather: The New Normal",
+      "intent": "explain-concept",
+      "key_points": [
+        "Increased frequency of superstorms",
+        "Prolonged droughts and heatwaves",
+        "Destabilization of jet streams"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 5,
+      "title": "Mitigation vs. Adaptation Strategies",
+      "intent": "compare",
+      "key_points": [
+        "Reducing emissions vs. adjusting to change",
+        "Renewable energy transition",
+        "Building resilient infrastructure"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 6,
+      "title": "Pathways to a Sustainable Future",
+      "intent": "list-points",
+      "key_points": [
+        "Reforestation and carbon capture",
+        "Circular economy principles",
+        "Policy changes and international treaties"
+      ],
+      "layout_hint": "bullet-list"
+    },
+    {
+      "index": 7,
+      "title": "Conclusion: A Call to Action",
+      "intent": "summary",
+      "key_points": [
+        "Summary of scientific urgency",
+        "Key mitigation priorities",
+        "Individual and collective responsibility"
+      ],
+      "layout_hint": "bullet-list"
+    }
+  ],
+  "slides": [
+    {
+      "index": 1,
+      "title": "Global Warming: Challenges and Solutions",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      display: flex;\n      flex-direction: column;\n      justify-content: center;\n      align-items: center;\n      text-align: center;\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      overflow: hidden;\n      position: relative;\n    }\n\n    .hero-content {\n      z-index: 2;\n      max-width: 80%;\n      margin: 0 auto;\n    }\n\n    .hero-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 5vw, 4.5rem);\n      line-height: 1.1;\n      margin-bottom: 1.5rem;\n      color: var(--text);\n      text-transform: uppercase;\n      letter-spacing: -0.02em;\n    }\n\n    .hero-subtitle {\n      font-size: clamp(1rem, 2vw, 1.5rem);\n      color: var(--text-muted);\n      line-height: 1.6;\n      max-width: 700px;\n      margin: 0 auto 2.5rem auto;\n    }\n\n    .cta-badge {\n      display: inline-block;\n      padding: 0.75rem 1.5rem;\n      border: 1px solid var(--accent);\n      color: var(--accent);\n      font-weight: 600;\n      border-radius: 4px;\n      text-transform: uppercase;\n      letter-spacing: 0.1em;\n      font-size: clamp(0.75rem, 1vw, 1rem);\n      box-shadow: 0 0 15px var(--accent-glow);\n    }\n\n    .deco-ring {\n      position: absolute;\n      width: 60vh;\n      height: 60vh;\n      border: 1px solid var(--border);\n      border-radius: 50%;\n      opacity: 0.3;\n      z-index: 1;\n      animation: pulse 8s infinite ease-in-out;\n    }\n\n    .deco-ring::after {\n      content: '';\n      position: absolute;\n      top: -1px; left: -1px; right: -1px; bottom: -1px;\n      border: 1px solid var(--accent);\n      border-radius: 50%;\n      opacity: 0.5;\n      animation: rotate 20s linear infinite;\n    }\n\n    @keyframes pulse {\n      0%, 100% { transform: scale(1); opacity: 0.3; }\n      50% { transform: scale(1.1); opacity: 0.1; }\n    }\n\n    @keyframes rotate {\n      from { transform: rotate(0deg); }\n      to { transform: rotate(360deg); }\n    }\n\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);\n    }\n\n    .reveal.active {\n      opacity: 1;\n      transform: translateY(0);\n    }\n  </style>\n\n  <div class=\"deco-ring\"></div>\n\n  <div class=\"hero-content\">\n    <h1 class=\"hero-title reveal visible active\" style=\"--delay: 0.2s\">Global Warming: <br>Challenges and Solutions</h1>\n    <p class=\"hero-subtitle reveal visible active\" style=\"--delay: 0.4s\">\n      The climate crisis has reached a critical tipping point. As global temperatures continue to rise, our window to secure a sustainable future is narrowing.\n    </p>\n    <div class=\"cta-badge reveal visible active\" style=\"--delay: 0.6s\">\n      Act Now for Tomorrow\n    </div>\n  </div>\n\n  \n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 2,
+      "title": "The Mechanics of Greenhouse Emissions",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; background-color: var(--bg); color: var(--text); font-family: var(--font-body);\">\n  <style>\n    .slide-content {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 3rem;\n      max-width: 90vw;\n      align-items: start;\n    }\n    .slide-header {\n      grid-column: 1 / -1;\n      text-align: left;\n      margin-bottom: 2rem;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin: 0;\n      border-left: 8px solid var(--accent);\n      padding-left: 1.5rem;\n    }\n    .mechanism-diagram {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: 2rem;\n      position: relative;\n      overflow: hidden;\n      box-shadow: 0 0 20px var(--accent-glow);\n    }\n    .process-step {\n      display: flex;\n      align-items: center;\n      gap: 1rem;\n      margin-bottom: 1.5rem;\n      opacity: 0;\n      transform: translateX(-20px);\n      transition: all 0.5s ease;\n    }\n    .process-step.reveal {\n      opacity: 1;\n      transform: translateX(0);\n      transition-delay: var(--delay);\n    }\n    .step-number {\n      background: var(--accent);\n      color: var(--bg);\n      width: 2rem;\n      height: 2rem;\n      border-radius: 50%;\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      font-weight: bold;\n      flex-shrink: 0;\n    }\n    .sources-grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 1rem;\n      margin-top: 2rem;\n    }\n    .source-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      padding: 1.5rem;\n      border-radius: 0.5rem;\n      transition: transform 0.3s ease;\n    }\n    .source-card:hover {\n      transform: translateY(-5px);\n      border-color: var(--accent);\n    }\n    .source-card h4 {\n      margin: 0 0 0.5rem 0;\n      color: var(--accent);\n      font-family: var(--font-head);\n    }\n    .source-card p {\n      font-size: clamp(0.9rem, 1.2vw, 1.1rem);\n      color: var(--text-muted);\n      margin: 0;\n    }\n    .correlation-alert {\n      margin-top: 2rem;\n      padding: 1rem;\n      background: rgba(255, 0, 0, 0.1);\n      border-left: 4px solid #ff4444;\n      font-style: italic;\n      color: var(--text-muted);\n      font-size: clamp(0.9rem, 1.2vw, 1.1rem);\n    }\n    .visual-layer {\n      position: absolute;\n      top: 0; right: 0;\n      width: 100px; height: 100px;\n      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);\n      opacity: 0.3;\n    }\n  </style>\n\n  <div class=\"slide-content\">\n    <header class=\"slide-header\">\n      <h1 class=\"slide-title\">The Mechanics of Greenhouse Emissions</h1>\n    </header>\n\n    <div class=\"mechanism-diagram\">\n      <div class=\"visual-layer\"></div>\n      <h3 style=\"color: var(--accent); margin-bottom: 1.5rem; font-family: var(--font-head);\">The Greenhouse Process</h3>\n      \n      <div class=\"process-step reveal visible\" style=\"--delay: 0.2s\">\n        <div class=\"step-number\">1</div>\n        <div><strong>Solar Radiation:</strong> High-energy shortwave light enters the atmosphere.</div>\n      </div>\n      \n      <div class=\"process-step reveal visible\" style=\"--delay: 0.4s\">\n        <div class=\"step-number\">2</div>\n        <div><strong>Surface Absorption:</strong> The Earth absorbs energy and re-emits it as infrared heat.</div>\n      </div>\n      \n      <div class=\"process-step reveal visible\" style=\"--delay: 0.6s\">\n        <div class=\"step-number\">3</div>\n        <div><strong>Atmospheric Trapping:</strong> GHGs absorb this heat, preventing it from escaping to space.</div>\n      </div>\n      \n      <div class=\"process-step reveal visible\" style=\"--delay: 0.8s\">\n        <div class=\"step-number\">4</div>\n        <div><strong>Thermal Feedback:</strong> Trapped heat increases surface and atmospheric temperature.</div>\n      </div>\n    </div>\n\n    <div class=\"details-col\">\n      <h3 style=\"color: var(--text); font-family: var(--font-head); margin-bottom: 1rem;\">Primary Forcing Agents</h3>\n      <div class=\"sources-grid\">\n        <div class=\"source-card reveal visible\" style=\"--delay: 1s\">\n          <h4>CO₂</h4>\n          <p>Fossil fuel combustion, deforestation, and industrial cement production.</p>\n        </div>\n        <div class=\"source-card reveal visible\" style=\"--delay: 1.2s\">\n          <h4>CH₄</h4>\n          <p>Agriculture (livestock), landfill decomposition, and natural gas leaks.</p>\n        </div>\n      </div>\n\n      <div class=\"correlation-alert reveal visible\" style=\"--delay: 1.4s\">\n        <strong>Linear Correlation:</strong> Historical data shows a direct, positive correlation between atmospheric CO₂ concentrations and global mean temperature anomalies.\n      </div>\n    </div>\n  </div>\n\n  \n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 3,
+      "title": "Environmental Impact and Cascading Effects",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: flex;\n      flex-direction: column;\n      justify-content: center;\n      align-items: center;\n      padding: 2rem;\n      gap: 2rem;\n    }\n\n    .slide-header {\n      text-align: center;\n      max-width: 80%;\n    }\n\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(1.5rem, 4vw, 3rem);\n      color: var(--accent);\n      margin-bottom: 1rem;\n      text-shadow: 0 0 15px var(--accent-glow);\n    }\n\n    .impact-container {\n      display: flex;\n      flex-direction: column;\n      gap: 1.5rem;\n      width: 100%;\n      max-width: 900px;\n    }\n\n    .impact-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-left: 4px solid var(--accent);\n      padding: 1.5rem;\n      border-radius: 0.5rem;\n      display: grid;\n      grid-template-columns: auto 1fr;\n      gap: 1.5rem;\n      align-items: center;\n      transition: transform 0.3s ease;\n    }\n\n    .impact-card:hover {\n      transform: translateX(10px);\n      background: var(--surface);\n      box-shadow: 0 0 20px var(--accent-glow);\n    }\n\n    .icon-box {\n      width: 50px;\n      height: 50px;\n      background: var(--accent);\n      border-radius: 50%;\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      flex-shrink: 0;\n    }\n\n    .icon-box svg {\n      width: 24px;\n      height: 24px;\n      fill: var(--bg);\n    }\n\n    .impact-content h3 {\n      font-family: var(--font-head);\n      font-size: clamp(1.1rem, 2vw, 1.5rem);\n      margin: 0 0 0.5rem 0;\n    }\n\n    .impact-content p {\n      font-size: clamp(0.9rem, 1.5vw, 1.1rem);\n      color: var(--text-muted);\n      margin: 0;\n      line-height: 1.5;\n    }\n\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n  </style>\n\n  <div class=\"slide-header reveal visible\" style=\"--delay: 0.1s\">\n    <h1 class=\"slide-title\">Environmental Impact and Cascading Effects</h1>\n  </div>\n\n  <div class=\"impact-container\">\n    <div class=\"impact-card reveal visible\" style=\"--delay: 0.3s\">\n      <div class=\"icon-box\">\n        <svg viewBox=\"0 0 24 24\"><path d=\"M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2z\"></path></svg>\n      </div>\n      <div class=\"impact-content\">\n        <h3>Melting Polar Ice Caps</h3>\n        <p>Rapid thermal expansion and glacial runoff causing unprecedented loss of Albedo effect, creating a positive feedback loop of further warming.</p>\n      </div>\n    </div>\n\n    <div class=\"impact-card reveal visible\" style=\"--delay: 0.5s\">\n      <div class=\"icon-box\">\n        <svg viewBox=\"0 0 24 24\"><path d=\"M12 21.5c-4.42 0-8-3.58-8-8 0-1.3.3-2.5 0.8-3.6L4 4h16l-1.2 7.9c0.5 1.1 0.8 2.3 0.8 3.6 0 4.42-3.58 8-8 8z\"></path></svg>\n      </div>\n      <div class=\"impact-content\">\n        <h3>Accelerated Sea-Level Rise</h3>\n        <p>Direct consequences for coastal megacities and low-lying islands, leading to saltwater intrusion into freshwater aquifers and massive human migration.</p>\n      </div>\n    </div>\n\n    <div class=\"impact-card reveal visible\" style=\"--delay: 0.7s\">\n      <div class=\"icon-box\">\n        <svg viewBox=\"0 0 24 24\"><path d=\"M12 2L4.5 20.29l.71.71L12 18l7.79 2.71.71-.71L12 2z\"></path></svg>\n      </div>\n      <div class=\"impact-content\">\n        <h3>Loss of Critical Biodiversity</h3>\n        <p>Fragmentation of habitats and shifting climatic zones causing species extinction rates to accelerate, destabilizing entire food webs and ecosystems.</p>\n      </div>\n    </div>\n  </div>\n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 4,
+      "title": "Extreme Weather: The New Normal",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body);\">\n  <style>\n    .slide-content {\n      width: 90%;\n      max-width: 1200px;\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\n      gap: 3rem;\n      align-items: center;\n    }\n    .slide-header {\n      grid-column: 1 / -1;\n      text-align: left;\n      margin-bottom: 2rem;\n    }\n    .slide-header h1 {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin: 0;\n      border-left: 8px solid var(--accent);\n      padding-left: 1.5rem;\n    }\n    .concept-text {\n      font-size: clamp(1.1rem, 1.5vw, 1.4rem);\n      line-height: 1.6;\n      color: var(--text-muted);\n    }\n    .feature-grid {\n      display: flex;\n      flex-direction: column;\n      gap: 1.5rem;\n    }\n    .feature-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      padding: 1.5rem;\n      border-radius: 12px;\n      position: relative;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n    }\n    .feature-card:hover {\n      transform: translateX(10px);\n      border-color: var(--accent);\n    }\n    .feature-card h3 {\n      color: var(--accent);\n      font-family: var(--font-head);\n      font-size: clamp(1.2rem, 2vw, 1.5rem);\n      margin: 0 0 0.5rem 0;\n    }\n    .feature-card p {\n      margin: 0;\n      font-size: clamp(0.9rem, 1.2vw, 1.1rem);\n      color: var(--text-muted);\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n    .accent-glow {\n      position: absolute;\n      top: -1px;\n      left: -1px;\n      right: -1px;\n      bottom: -1px;\n      border-radius: 12px;\n      box-shadow: 0 0 15px var(--accent-glow);\n      opacity: 0;\n      transition: opacity 0.3s ease;\n      pointer-events: none;\n    }\n    .feature-card:hover .accent-glow {\n      opacity: 0.3;\n    }\n  </style>\n\n  <div class=\"slide-content\">\n    <header class=\"slide-header reveal visible\" style=\"--delay: 0.1s\">\n      <h1>Extreme Weather: The New Normal</h1>\n    </header>\n\n    <div class=\"concept-text reveal visible\" style=\"--delay: 0.3s\">\n      <p>\n        Climate instability has shifted from theoretical projections to observed reality. \n        We are witnessing a systemic breakdown of historical weather patterns, where \n        \"once-in-a-century\" events now occur with alarming regularity.\n      </p>\n      <p>\n        This volatility is driven by increased thermal energy in the atmosphere and oceans, \n        creating a feedback loop that amplifies the intensity of meteorological disruptions.\n      </p>\n    </div>\n\n    <div class=\"feature-grid\">\n      <div class=\"feature-card reveal visible\" style=\"--delay: 0.5s\">\n        <div class=\"accent-glow\"></div>\n        <h3>Superstorms</h3>\n        <p>Higher sea-surface temperatures fueling more frequent and intense hurricanes and typhoons with rapid intensification cycles.</p>\n      </div>\n      \n      <div class=\"feature-card reveal visible\" style=\"--delay: 0.7s\">\n        <div class=\"accent-glow\"></div>\n        <h3>Aridity &amp; Heat</h3>\n        <p>Prolonged droughts and \"heat domes\" that stall over regions, devastating agriculture and straining power grids.</p>\n      </div>\n      \n      <div class=\"feature-card reveal visible\" style=\"--delay: 0.9s\">\n        <div class=\"accent-glow\"></div>\n        <h3>Jet Stream Collapse</h3>\n        <p>Destabilization of polar vortex boundaries, pushing arctic air deep south and trapping weather systems in place for weeks.</p>\n      </div>\n    </div>\n  </div>\n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 5,
+      "title": "Mitigation vs. Adaptation Strategies",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: flex;\n      flex-direction: column;\n      padding: clamp(2rem, 5vh, 5rem);\n      overflow: hidden;\n    }\n    .slide-header {\n      margin-bottom: clamp(2rem, 5vh, 4rem);\n      text-align: center;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin: 0;\n      text-transform: uppercase;\n      letter-spacing: -0.02em;\n    }\n    .comparison-grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: clamp(1.5rem, 3vw, 3rem);\n      flex-grow: 1;\n      align-items: start;\n    }\n    .strategy-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: clamp(1.5rem, 3vw, 2.5rem);\n      position: relative;\n      transition: transform 0.3s ease, box-shadow 0.3s ease;\n      height: fit-content;\n    }\n    .strategy-card:hover {\n      transform: translateY(-5px);\n      box-shadow: 0 0 20px var(--accent-glow);\n      border-color: var(--accent);\n    }\n    .card-label {\n      font-family: var(--font-head);\n      font-size: clamp(1.2rem, 2vw, 2rem);\n      color: var(--accent);\n      margin-bottom: 1.5rem;\n      display: block;\n      border-bottom: 2px solid var(--accent);\n      width: fit-content;\n      padding-bottom: 0.5rem;\n    }\n    .card-definition {\n      font-size: clamp(1.1rem, 1.8vw, 1.5rem);\n      line-height: 1.5;\n      margin-bottom: 2rem;\n      color: var(--text);\n    }\n    .card-list {\n      list-style: none;\n      padding: 0;\n      margin: 0;\n    }\n    .card-list li {\n      font-size: clamp(1rem, 1.5vw, 1.3rem);\n      color: var(--text-muted);\n      margin-bottom: 1rem;\n      padding-left: 1.5rem;\n      position: relative;\n    }\n    .card-list li::before {\n      content: \"→\";\n      position: absolute;\n      left: 0;\n      color: var(--accent);\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);\n    }\n    .reveal.active {\n      opacity: 1;\n      transform: translateY(0);\n    }\n  </style>\n\n  <div class=\"slide-header\">\n    <h1 class=\"slide-title\">Mitigation vs. Adaptation Strategies</h1>\n  </div>\n\n  <div class=\"comparison-grid\">\n    <div class=\"strategy-card reveal visible active\" style=\"--delay: 0.2s\">\n      <span class=\"card-label\">Mitigation</span>\n      <p class=\"card-definition\">Addressing the <strong>root causes</strong> of climate change by reducing the source or enhancing the sinks of greenhouse gases.</p>\n      <ul class=\"card-list\">\n        <li>Rapid transition to renewable energy (Wind, Solar, Geothermal)</li>\n        <li>Reforestation and land restoration</li>\n        <li>Carbon capture and sequestration technologies</li>\n        <li>Energy efficiency improvements in industry</li>\n      </ul>\n    </div>\n\n    <div class=\"strategy-card reveal visible\" style=\"--delay: 0.4s\">\n      <span class=\"card-label\">Adaptation</span>\n      <p class=\"card-definition\">Adjusting <strong>ecological, social, and economic systems</strong> in response to actual or expected climatic stimuli.</p>\n      <ul class=\"card-list\">\n        <li>Building resilient infrastructure (Sea walls, flood-proof housing)</li>\n        <li>Developing drought-resistant crop varieties</li>\n        <li>Implementing early warning systems for extreme weather</li>\n        <li>Managing water resources for unpredictable rainfall</li>\n      </ul>\n    </div>\n  </div>\n\n  \n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 7,
+      "title": "Conclusion: A Call to Action",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: flex;\n      flex-direction: column;\n      justify-content: center;\n      align-items: center;\n      padding: 5% 8%;\n      overflow: hidden;\n      position: relative;\n    }\n\n    .content-grid {\n      display: grid;\n      grid-template-columns: 1fr;\n      gap: 3rem;\n      max-width: 1100px;\n      width: 100%;\n    }\n\n    .title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 5vw, 3.5rem);\n      color: var(--accent);\n      margin-bottom: 2rem;\n      text-align: center;\n      text-transform: uppercase;\n      letter-spacing: 0.1em;\n      text-shadow: 0 0 20px var(--accent-glow);\n    }\n\n    .key-takeaways {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: 2.5rem;\n      box-shadow: 0 10px 30px rgba(0,0,0,0.5);\n      position: relative;\n    }\n\n    .takeaways-heading {\n      font-family: var(--font-head);\n      font-size: clamp(1.5rem, 3vw, 2rem);\n      margin-bottom: 1.5rem;\n      display: flex;\n      align-items: center;\n      gap: 1rem;\n    }\n\n    .takeaways-heading::before {\n      content: '';\n      width: 4px;\n      height: 1.5rem;\n      background: var(--accent);\n      display: inline-block;\n    }\n\n    .bullet-list {\n      list-style: none;\n      padding: 0;\n      margin: 0;\n    }\n\n    .bullet-item {\n      margin-bottom: 1.5rem;\n      padding-left: 1.5rem;\n      position: relative;\n      font-size: clamp(1.1rem, 2vw, 1.4rem);\n      line-height: 1.6;\n      color: var(--text-muted);\n      transition: color 0.3s ease;\n    }\n\n    .bullet-item:hover {\n      color: var(--text);\n    }\n\n    .bullet-item::before {\n      content: '▹';\n      position: absolute;\n      left: 0;\n      color: var(--accent);\n      font-weight: bold;\n    }\n\n    .bullet-item strong {\n      color: var(--text);\n      display: block;\n      margin-bottom: 0.25rem;\n    }\n\n    .cta-box {\n      background: linear-gradient(135deg, var(--surface), var(--bg));\n      border-left: 4px solid var(--accent);\n      padding: 2rem;\n      text-align: center;\n      margin-top: -1rem; /* Moved up as requested */\n      border-radius: 0 1rem 1rem 0;\n      font-size: clamp(1.2rem, 2.5vw, 1.8rem);\n      font-style: italic;\n      color: var(--text);\n      box-shadow: -10px 0 20px rgba(0,0,0,0.2);\n    }\n\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      transition: all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);\n    }\n\n    .reveal.active {\n      opacity: 1;\n      transform: translateY(0);\n    }\n  </style>\n\n  <div class=\"content-grid\">\n    <h1 class=\"title reveal active visible\" style=\"--delay: 0.1s\">Conclusion: A Call to Action</h1>\n    \n    <div class=\"key-takeaways reveal active visible\" style=\"--delay: 0.3s\">\n      <div class=\"takeaways-heading\">Key Takeaways</div>\n      <ul class=\"bullet-list\">\n        <li class=\"bullet-item\">\n          <strong>Scientific Urgency</strong>\n          The window to limit warming to 1.5°C is closing rapidly; systemic transition is no longer optional, but a survival imperative.\n        </li>\n        <li class=\"bullet-item\">\n          <strong>Mitigation Priorities</strong>\n          We must aggressively scale reforestation, deploy industrial-grade carbon capture, and pivot to a circular economy to eliminate waste.\n        </li>\n        <li class=\"bullet-item\">\n          <strong>Policy &amp; Governance</strong>\n          Individual changes are insufficient without binding international treaties that hold corporations and nations accountable.\n        </li>\n        <li class=\"bullet-item\">\n          <strong>Collective Responsibility</strong>\n          The intersection of grassroots activism and high-level policy creates the necessary pressure for structural change.\n        </li>\n      </ul>\n    </div>\n\n    <div class=\"cta-box reveal active visible\" style=\"--delay: 0.6s\">\n      \"The future is not something we enter; it is something we create. The tools are ready—the will must now follow.\"\n    </div>\n  </div>\n\n  \n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 6,
+      "title": "Pathways to a Sustainable Future",
+      "html": "\n  <section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; padding: clamp(2rem, 5vw, 5rem); background-color: var(--bg); color: var(--text); font-family: var(--font-body);\">\n  <style>\n    .slide {\n      position: relative;\n      overflow: hidden;\n    }\n    .slide-content {\n      max-width: 900px;\n      margin: 0 auto;\n      width: 100%;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin-bottom: 3rem;\n      position: relative;\n      display: inline-block;\n    }\n    .slide-title::after {\n      content: '';\n      position: absolute;\n      bottom: -10px;\n      left: 0;\n      width: 60px;\n      height: 4px;\n      background: var(--accent);\n      box-shadow: 0 0 10px var(--accent-glow);\n    }\n    .pathways-list {\n      list-style: none;\n      padding: 0;\n      margin: 0;\n      display: flex;\n      flex-direction: column;\n      gap: 1.5rem;\n    }\n    .pathway-item {\n      display: flex;\n      align-items: center;\n      gap: 1rem;\n      padding: 1.5rem;\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 0.5rem;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n      cursor: pointer;\n    }\n    .pathway-item:hover {\n      transform: translateX(10px);\n      border-color: var(--accent);\n    }\n    .bullet-icon {\n      width: 12px;\n      height: 12px;\n      background: var(--accent);\n      border-radius: 50%;\n      box-shadow: 0 0 8px var(--accent-glow);\n      flex-shrink: 0;\n    }\n    .pathway-text {\n      font-size: clamp(1.1rem, 2vw, 1.5rem);\n      line-height: 1.4;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n  </style>\n\n  <div class=\"slide-content\">\n    <h1 class=\"slide-title reveal visible\" style=\"--delay: 0.2s\">Pathways to a Sustainable Future</h1>\n    \n    <ul class=\"pathways-list\">\n      <li class=\"pathway-item reveal visible\" style=\"--delay: 0.4s\">\n        <div class=\"bullet-icon\"></div>\n        <span class=\"pathway-text\">Large-scale reforestation and advanced carbon capture technologies</span>\n      </li>\n      <li class=\"pathway-item reveal visible\" style=\"--delay: 0.6s\">\n        <div class=\"bullet-icon\"></div>\n        <span class=\"pathway-text\">Transitioning to circular economy principles to eliminate waste</span>\n      </li>\n      <li class=\"pathway-item reveal visible\" style=\"--delay: 0.8s\">\n        <div class=\"bullet-icon\"></div>\n        <span class=\"pathway-text\">Implementing systemic policy changes and binding international treaties</span>\n      </li>\n      <li class=\"pathway-item reveal visible\" style=\"--delay: 1.0s\">\n        <div class=\"bullet-icon\"></div>\n        <span class=\"pathway-text\">Decarbonizing industrial grids via sustainable energy infrastructure</span>\n      </li>\n      <li class=\"pathway-item reveal visible\" style=\"--delay: 1.2s\">\n        <div class=\"bullet-icon\"></div>\n        <span class=\"pathway-text\">Integrating regenerative agriculture to restore soil health</span>\n      </li>\n    </ul>\n  </div>\n</section>\n  \n\n\n  ",
+      "snapshot_b64": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    }
+  ],
+  "current_index": 7
+}

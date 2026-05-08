@@ -1,0 +1,110 @@
+
+  <section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; padding: clamp(2rem, 5vw, 5rem); background-color: var(--bg); color: var(--text); font-family: var(--font-body);">
+  <style>
+    .slide {
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-content {
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .slide-title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      color: var(--text);
+      margin-bottom: 3rem;
+      position: relative;
+      display: inline-block;
+    }
+    .slide-title::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      width: 60px;
+      height: 4px;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .pathways-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .pathway-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+      cursor: pointer;
+    }
+    .pathway-item:hover {
+      transform: translateX(10px);
+      border-color: var(--accent);
+    }
+    .bullet-icon {
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-glow);
+      flex-shrink: 0;
+    }
+    .pathway-text {
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      line-height: 1.4;
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: revealIn 0.6s forwards;
+      animation-delay: var(--delay);
+    }
+    @keyframes revealIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+
+  <div class="slide-content">
+    <h1 class="slide-title reveal visible" style="--delay: 0.2s">Pathways to a Sustainable Future</h1>
+    
+    <ul class="pathways-list">
+      <li class="pathway-item reveal visible" style="--delay: 0.4s">
+        <div class="bullet-icon"></div>
+        <span class="pathway-text">Large-scale reforestation and advanced carbon capture technologies</span>
+      </li>
+      <li class="pathway-item reveal visible" style="--delay: 0.6s">
+        <div class="bullet-icon"></div>
+        <span class="pathway-text">Transitioning to circular economy principles to eliminate waste</span>
+      </li>
+      <li class="pathway-item reveal visible" style="--delay: 0.8s">
+        <div class="bullet-icon"></div>
+        <span class="pathway-text">Implementing systemic policy changes and binding international treaties</span>
+      </li>
+      <li class="pathway-item reveal visible" style="--delay: 1.0s">
+        <div class="bullet-icon"></div>
+        <span class="pathway-text">Decarbonizing industrial grids via sustainable energy infrastructure</span>
+      </li>
+      <li class="pathway-item reveal visible" style="--delay: 1.2s">
+        <div class="bullet-icon"></div>
+        <span class="pathway-text">Integrating regenerative agriculture to restore soil health</span>
+      </li>
+    </ul>
+  </div>
+</section>
+  
+
+
+  

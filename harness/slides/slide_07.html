@@ -1,0 +1,156 @@
+
+  <section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;">
+  <style>
+    .slide {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 5% 8%;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3rem;
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    .title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      color: var(--accent);
+      margin-bottom: 2rem;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .key-takeaways {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2.5rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      position: relative;
+    }
+
+    .takeaways-heading {
+      font-family: var(--font-head);
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .takeaways-heading::before {
+      content: '';
+      width: 4px;
+      height: 1.5rem;
+      background: var(--accent);
+      display: inline-block;
+    }
+
+    .bullet-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .bullet-item {
+      margin-bottom: 1.5rem;
+      padding-left: 1.5rem;
+      position: relative;
+      font-size: clamp(1.1rem, 2vw, 1.4rem);
+      line-height: 1.6;
+      color: var(--text-muted);
+      transition: color 0.3s ease;
+    }
+
+    .bullet-item:hover {
+      color: var(--text);
+    }
+
+    .bullet-item::before {
+      content: '▹';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    .bullet-item strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .cta-box {
+      background: linear-gradient(135deg, var(--surface), var(--bg));
+      border-left: 4px solid var(--accent);
+      padding: 2rem;
+      text-align: center;
+      margin-top: -1rem; /* Moved up as requested */
+      border-radius: 0 1rem 1rem 0;
+      font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+      font-style: italic;
+      color: var(--text);
+      box-shadow: -10px 0 20px rgba(0,0,0,0.2);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .reveal.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+
+  <div class="content-grid">
+    <h1 class="title reveal active visible" style="--delay: 0.1s">Conclusion: A Call to Action</h1>
+    
+    <div class="key-takeaways reveal active visible" style="--delay: 0.3s">
+      <div class="takeaways-heading">Key Takeaways</div>
+      <ul class="bullet-list">
+        <li class="bullet-item">
+          <strong>Scientific Urgency</strong>
+          The window to limit warming to 1.5°C is closing rapidly; systemic transition is no longer optional, but a survival imperative.
+        </li>
+        <li class="bullet-item">
+          <strong>Mitigation Priorities</strong>
+          We must aggressively scale reforestation, deploy industrial-grade carbon capture, and pivot to a circular economy to eliminate waste.
+        </li>
+        <li class="bullet-item">
+          <strong>Policy &amp; Governance</strong>
+          Individual changes are insufficient without binding international treaties that hold corporations and nations accountable.
+        </li>
+        <li class="bullet-item">
+          <strong>Collective Responsibility</strong>
+          The intersection of grassroots activism and high-level policy creates the necessary pressure for structural change.
+        </li>
+      </ul>
+    </div>
+
+    <div class="cta-box reveal active visible" style="--delay: 0.6s">
+      "The future is not something we enter; it is something we create. The tools are ready—the will must now follow."
+    </div>
+  </div>
+
+  
+</section>
+  
+
+
+  

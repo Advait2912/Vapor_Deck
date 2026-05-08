@@ -99,9 +99,29 @@ function syncStatusFromState() {
   }
 }
 
+function setupIframeScaler() {
+  const container = document.getElementById('preview-container');
+  const iframe = document.getElementById('slide-iframe');
+  if (!container || !iframe) return;
+
+  const observer = new ResizeObserver(entries => {
+    for (let entry of entries) {
+      const w = entry.contentRect.width;
+      const h = entry.contentRect.height;
+      // Leave 40px padding total (20px each side)
+      const scaleX = (w - 40) / 1280;
+      const scaleY = (h - 40) / 720;
+      const scale = Math.min(scaleX, scaleY);
+      iframe.style.transform = `scale(${scale})`;
+    }
+  });
+  observer.observe(container);
+}
+
 // ── Initialization ────────────────────────────────────────────────────────────
 async function init() {
   initResizers();
+  setupIframeScaler();
   
   setupEventListeners({
     onStartGeneration: startGeneration,
@@ -473,7 +493,21 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
 // ── Slide Approval ────────────────────────────────────────────────────────────
 async function approveSlide() {
   try {
-    const html = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+    const iframe = elements.slideIframe;
+    // Capture live HTML directly from the body now that scaler wrapper is removed
+    let html = '';
+    if (iframe.contentDocument && iframe.contentDocument.body) {
+      // Clone body to remove the injected script tag before saving
+      const bodyClone = iframe.contentDocument.body.cloneNode(true);
+      const scriptTags = bodyClone.getElementsByTagName('script');
+      for (let i = scriptTags.length - 1; i >= 0; i--) {
+        scriptTags[i].parentNode.removeChild(scriptTags[i]);
+      }
+      html = bodyClone.innerHTML;
+    } else {
+      html = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+    }
+
     if (!html?.trim()) {
       renderPlaceholder('Generate this slide first, then approve.');
       return;
@@ -700,14 +734,123 @@ async function stopConversation() {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 async function handleExport() {
-  if (!state.sessionId) return;
+  if (!state.sessionId || !state.slides.length) {
+    alert('No slides to export. Please generate and approve some slides first.');
+    return;
+  }
+
   try {
     elements.exportBtn.textContent = 'Exporting...';
     elements.exportBtn.disabled = true;
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    alert('Deck exported successfully!');
+
+    const slideData = [];
+    for (let i = 0; i < state.outline.length; i++) {
+      // 1. If it's the slide currently on screen, capture live DOM (WYSIWYG)
+      if (i === state.currentIndex && elements.slideIframe.contentDocument?.body) {
+        const bodyClone = elements.slideIframe.contentDocument.body.cloneNode(true);
+        const scriptTags = bodyClone.getElementsByTagName('script');
+        for (let j = scriptTags.length - 1; j >= 0; j--) {
+          scriptTags[j].parentNode.removeChild(scriptTags[j]);
+        }
+        slideData.push(bodyClone.innerHTML);
+        continue;
+      }
+
+      // 2. Use explicitly approved HTML if available
+      const approved = state.slides.find(s => s.index === i);
+      if (approved) {
+        slideData.push(approved.html);
+        continue;
+      }
+
+      // 3. Fallback to raw draft if not approved
+      if (state.draftSlides[i]) {
+        slideData.push(state.draftSlides[i]);
+        continue;
+      }
+
+      // 4. Fallback to latest known HTML
+      if (state.latestSlides[i]) {
+        slideData.push(state.latestSlides[i]);
+        continue;
+      }
+
+      // 5. Blank placeholder if slide was completely skipped
+      slideData.push('<div style="color:#666;display:flex;align-items:center;justify-content:center;height:100%;width:100%;font-size:2rem;background:#000;">[Slide ' + (i+1) + ' Not Generated]</div>');
+    }
+    const theme = state.theme || 'dark-tech';
+
+    console.log(`Exporting ${slideData.length} slides (theme: ${theme})`);
+
+    const response = await fetch(
+      `http://localhost:8000/api/export/session/${state.sessionId}/pdf`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides: slideData, theme }),
+      }
+    );
+
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      let rawText = '';
+      try {
+        rawText = await response.text();
+        const err = JSON.parse(rawText);
+        detail = err.detail || JSON.stringify(err);
+      } catch (_) {
+        detail = rawText || detail;
+      }
+      console.error('Export error response:', detail);
+      throw new Error(detail);
+    }
+
+    // Server returns raw PDF bytes
+    const pdfBlob = await response.blob();
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vapor_deck_${state.sessionId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
   } catch (error) {
     console.error('Export failed:', error);
+    const msg = error.message || String(error);
+
+    // Offer to download debug HTML so the user can inspect / report
+    const wantDebug = confirm(
+      'PDF export failed.\n\n' +
+      msg.substring(0, 500) + '\n\n' +
+      'Would you like to download the debug HTML file to inspect what went wrong?'
+    );
+    if (wantDebug) {
+      try {
+        const debugResp = await fetch(
+          `http://localhost:8000/api/export/session/${state.sessionId}/debug-html`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slides: state.slides.map(s => s.html), theme: state.theme || 'dark-tech' }),
+          }
+        );
+        if (debugResp.ok) {
+          const blob = await debugResp.blob();
+          const u = URL.createObjectURL(blob);
+          const a2 = document.createElement('a');
+          a2.href = u;
+          a2.download = `debug_${state.sessionId}.html`;
+          document.body.appendChild(a2);
+          a2.click();
+          document.body.removeChild(a2);
+          URL.revokeObjectURL(u);
+        }
+      } catch (e) {
+        console.error('Debug HTML download also failed:', e);
+      }
+    }
   } finally {
     elements.exportBtn.textContent = 'Export PDF';
     elements.exportBtn.disabled = false;

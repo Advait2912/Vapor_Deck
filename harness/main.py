@@ -96,7 +96,9 @@ def list_models():
 from routes.session import router as session_router
 from routes.upload import router as upload_router
 from routes.slide import router as slide_router
+from routes.export import router as export_router
 
 app.include_router(session_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
 app.include_router(slide_router, prefix="/api")
+app.include_router(export_router, prefix="/api")
