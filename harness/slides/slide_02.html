@@ -1,0 +1,158 @@
+
+  <section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; background-color: var(--bg); color: var(--text); font-family: var(--font-body);">
+  <style>
+    .slide-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      max-width: 90vw;
+      align-items: start;
+    }
+    .slide-header {
+      grid-column: 1 / -1;
+      text-align: left;
+      margin-bottom: 2rem;
+    }
+    .slide-title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      color: var(--text);
+      margin: 0;
+      border-left: 8px solid var(--accent);
+      padding-left: 1.5rem;
+    }
+    .mechanism-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .process-step {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      transform: translateX(-20px);
+      transition: all 0.5s ease;
+    }
+    .process-step.reveal {
+      opacity: 1;
+      transform: translateX(0);
+      transition-delay: var(--delay);
+    }
+    .step-number {
+      background: var(--accent);
+      color: var(--bg);
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .sources-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .source-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      transition: transform 0.3s ease;
+    }
+    .source-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--accent);
+    }
+    .source-card h4 {
+      margin: 0 0 0.5rem 0;
+      color: var(--accent);
+      font-family: var(--font-head);
+    }
+    .source-card p {
+      font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .correlation-alert {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: rgba(255, 0, 0, 0.1);
+      border-left: 4px solid #ff4444;
+      font-style: italic;
+      color: var(--text-muted);
+      font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+    }
+    .visual-layer {
+      position: absolute;
+      top: 0; right: 0;
+      width: 100px; height: 100px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.3;
+    }
+  </style>
+
+  <div class="slide-content">
+    <header class="slide-header">
+      <h1 class="slide-title">The Mechanics of Greenhouse Emissions</h1>
+    </header>
+
+    <div class="mechanism-diagram">
+      <div class="visual-layer"></div>
+      <h3 style="color: var(--accent); margin-bottom: 1.5rem; font-family: var(--font-head);">The Greenhouse Process</h3>
+      
+      <div class="process-step reveal visible" style="--delay: 0.2s">
+        <div class="step-number">1</div>
+        <div><strong>Solar Radiation:</strong> High-energy shortwave light enters the atmosphere.</div>
+      </div>
+      
+      <div class="process-step reveal visible" style="--delay: 0.4s">
+        <div class="step-number">2</div>
+        <div><strong>Surface Absorption:</strong> The Earth absorbs energy and re-emits it as infrared heat.</div>
+      </div>
+      
+      <div class="process-step reveal visible" style="--delay: 0.6s">
+        <div class="step-number">3</div>
+        <div><strong>Atmospheric Trapping:</strong> GHGs absorb this heat, preventing it from escaping to space.</div>
+      </div>
+      
+      <div class="process-step reveal visible" style="--delay: 0.8s">
+        <div class="step-number">4</div>
+        <div><strong>Thermal Feedback:</strong> Trapped heat increases surface and atmospheric temperature.</div>
+      </div>
+    </div>
+
+    <div class="details-col">
+      <h3 style="color: var(--text); font-family: var(--font-head); margin-bottom: 1rem;">Primary Forcing Agents</h3>
+      <div class="sources-grid">
+        <div class="source-card reveal visible" style="--delay: 1s">
+          <h4>CO₂</h4>
+          <p>Fossil fuel combustion, deforestation, and industrial cement production.</p>
+        </div>
+        <div class="source-card reveal visible" style="--delay: 1.2s">
+          <h4>CH₄</h4>
+          <p>Agriculture (livestock), landfill decomposition, and natural gas leaks.</p>
+        </div>
+      </div>
+
+      <div class="correlation-alert reveal visible" style="--delay: 1.4s">
+        <strong>Linear Correlation:</strong> Historical data shows a direct, positive correlation between atmospheric CO₂ concentrations and global mean temperature anomalies.
+      </div>
+    </div>
+  </div>
+
+  
+</section>
+  
+
+
+  

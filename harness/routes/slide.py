@@ -8,6 +8,7 @@ POST /api/session/{id}/slide/{n}/refine   — refine current slide (Day 2)
 import json
 import logging
 import os
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,25 @@ logger = logging.getLogger("slide")
 router = APIRouter()
 
 
+async def _update_context_in_background(session_id: str, html: str, model_name: str):
+    """Update deck context without blocking approve response."""
+    try:
+        session = get_session(session_id)
+        model = get_model(model_name)
+        update_prompt = build_context_update_prompt(html, session.deck_context)
+        raw_ctx = await collect_stream(
+            model,
+            [{"role": "user", "content": update_prompt}],
+            CONTEXT_UPDATE_SYSTEM,
+        )
+        updated_ctx = json.loads(strip_fences(raw_ctx))
+        updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
+        session.deck_context = updated_ctx
+        save_session(session)
+    except Exception as e:
+        logger.warning(f"[{session_id}] background context update failed (non-fatal): {e}")
+
+
 class ApproveSlideRequest(BaseModel):
     html: str
 
@@ -32,6 +52,7 @@ class ApproveSlideRequest(BaseModel):
 class RefineSlideRequest(BaseModel):
     mode: str  # "simplify" | "expand" | "example" | "interactive"
     current_html: str
+    instruction: str | None = None
 
 
 @router.post("/session/{session_id}/slide/{n}")
@@ -56,6 +77,24 @@ async def generate_slide(session_id: str, n: int):
     )
     if not slide_spec:
         raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
+
+    # Check if slide already exists and is approved or has content
+    existing = next((s for s in session.slides if s.index == n), None)
+    if existing and existing.html:
+        logger.info(f"[{session_id}] slide {n} already exists, streaming from cache")
+        async def cached_stream():
+            safe = existing.html.replace("\n", "\\n")
+            yield f"data: {safe}\n\n"
+            yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            cached_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     try:
         model = get_model(session.text_model)
@@ -140,21 +179,6 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
             detail="HTML does not appear to contain a valid slide section"
         )
 
-    model = get_model(session.text_model)
-    update_prompt = build_context_update_prompt(req.html, session.deck_context)
-
-    try:
-        raw_ctx = await collect_stream(
-            model,
-            [{"role": "user", "content": update_prompt}],
-            CONTEXT_UPDATE_SYSTEM,
-        )
-        updated_ctx = json.loads(strip_fences(raw_ctx))
-        updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
-        session.deck_context = updated_ctx
-    except Exception as e:
-        logger.warning(f"[{session_id}] context update failed (non-fatal): {e}")
-
     slide_data = SlideData(
         index=n,
         title=slide_spec.title,
@@ -171,6 +195,27 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
     is_done = n >= len(session.outline)
     session.status = "done" if is_done else "generating"
     save_session(session)
+    asyncio.create_task(_update_context_in_background(session_id, req.html, session.text_model))
+
+    # Save individual HTML and JSON files for convenience
+    try:
+        from store.sessions import get_project_dir
+        slide_filename = f"slide_{n:02d}.html"
+        slide_path = get_project_dir() / "slides" / slide_filename
+        with open(slide_path, "w", encoding="utf-8") as f:
+            f.write(req.html)
+        
+        json_filename = f"slide_{n:02d}.json"
+        json_path = get_project_dir() / "slides" / json_filename
+        with open(json_path, "w", encoding="utf-8") as f:
+            try:
+                f.write(slide_data.model_dump_json(indent=2))
+            except AttributeError:
+                f.write(slide_data.json(indent=2))
+
+        logger.info(f"[{session_id}] slide {n} files saved to {slide_path.parent}")
+    except Exception as e:
+        logger.error(f"[{session_id}] failed to save slide {n} files: {e}")
 
     logger.info(
         f"[{session_id}] slide {n} approved. "
@@ -213,6 +258,12 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
     }
 
     model = get_model(session.text_model)
+    relevant = get_relevant_chunks(
+        session,
+        slide_intent=f"{slide_spec.title} {' '.join(slide_spec.key_points)} {req.instruction or ''}",
+        max_tokens=1500,
+    )
+
     prompt = build_slide_prompt(
         n=n,
         total=len(session.outline),
@@ -222,7 +273,11 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         layout_hint=slide_spec.layout_hint,
         theme=session.theme,
         deck_context=session.deck_context,
+        relevant_chunks=relevant,
     ) + f"\n\n=== REFINEMENT INSTRUCTION ===\n{MODE_INSTRUCTIONS[req.mode]}"
+
+    if req.instruction and req.instruction.strip():
+        prompt += f"\nAdditional user instruction: {req.instruction.strip()}"
 
     logger.info(f"[{session_id}] refining slide {n} mode={req.mode}")
 

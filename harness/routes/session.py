@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ai.router import get_model
 from models.session import DeckSession, OutlineItem
-from store.sessions import sessions, get_session, save_session
+from store.sessions import sessions, get_session, save_session, delete_session
 from services.stream_utils import collect_stream, strip_fences
 from services.context_synthesis import synthesize_context
 from prompts.outline import build_outline_prompt, OUTLINE_SYSTEM
@@ -249,3 +249,11 @@ async def get_session_status(session_id: str):
         "current_index": session.current_index,
         "hard_constraints": session.hard_constraints,
     }
+
+
+@router.delete("/session/{session_id}")
+async def remove_session(session_id: str):
+    """Delete a session so a new conversation can start cleanly."""
+    delete_session(session_id)
+    logger.info(f"[{session_id}] session deleted")
+    return {"status": "deleted", "session_id": session_id}
