@@ -1,0 +1,113 @@
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;">
+  <style>
+    .slide {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      padding: clamp(2rem, 5vh, 5rem);
+      gap: 2rem;
+      overflow: hidden;
+    }
+
+    .slide-header {
+      text-align: left;
+    }
+
+    .slide-header h1 {
+      font-family: var(--font-head);
+      font-size: clamp(1.8rem, 4vw, 3.5rem);
+      color: var(--accent);
+      margin: 0;
+      text-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .slide-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .concept-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      position: relative;
+      transition: transform 0.3s ease;
+    }
+
+    .concept-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-5px);
+    }
+
+    .concept-card h2 {
+      font-family: var(--font-head);
+      font-size: clamp(1.2rem, 2vw, 1.8rem);
+      color: var(--accent);
+      margin-top: 0;
+    }
+
+    .concept-card p {
+      font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s forwards;
+      animation-delay: var(--delay);
+    }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      background: var(--accent-glow);
+      color: var(--text);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+  </style>
+
+  <div class="slide-header">
+    <h1 class="reveal visible" style="--delay: 0.1s">Foundations of Blockchain Architecture</h1>
+  </div>
+
+  <div class="slide-content">
+    <div class="concept-card reveal visible" style="--delay: 0.3s">
+      <span class="tag">Data Integrity</span>
+      <h2>Immutable Ledgers</h2>
+      <p>Cryptographic hashing ensures that once data is written to a block, it cannot be altered without changing every subsequent block. This creates a verifiable, permanent history of transactions.</p>
+      <p><strong>Core:</strong> SHA-256 • Merkle Trees • Chain-of-Trust</p>
+    </div>
+
+    <div class="concept-card reveal visible" style="--delay: 0.5s">
+      <span class="tag">Network Layer</span>
+      <h2>P2P Networking</h2>
+      <p>Distributed nodes maintain the ledger without a central authority. Gossiping protocols ensure state synchronization across the globe with high fault tolerance.</p>
+      <p><strong>Core:</strong> Node Discovery • Gossip Protocols • Decentralization</p>
+    </div>
+
+    <div class="concept-card reveal visible" style="--delay: 0.7s">
+      <span class="tag">Consensus Evolution</span>
+      <h2>The PoW to PoS Shift</h2>
+      <p>Moving from computationally expensive Proof-of-Work (mining) to Proof-of-Stake (validators) drastically reduces the carbon footprint and energy requirements.</p>
+      <p><strong>Impact:</strong> &gt;99% energy reduction • Higher Scalability • Sustainable Growth</p>
+    </div>
+  </div>
+</section>

@@ -25,6 +25,9 @@ export const state = {
   projectPath: '',
   uploadedAssets: [],
   isReorderMode: false, // UI toggle for drag-and-drop
+  // Export snapshots — frozen HTML+CSS captured at approval time, keyed by slide index.
+  // This is the single source of truth for PDF export.
+  exportSnapshots: {},
 };
 
 

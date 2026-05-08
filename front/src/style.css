@@ -224,8 +224,7 @@ main {
   background-image: radial-gradient(circle at center, #1a1a1a 1px, transparent 1px);
   background-size: 32px 32px;
   overflow: hidden;
-  min-height: 0; /* Critical for flex child height handling */
-  position: relative; /* Fixed: ensure indicator is positioned relative to this container */
+  position: relative; /* For absolutely centering the scaled iframe */
 }
 
 #slide-iframe {
@@ -236,6 +235,7 @@ main {
   background: #000;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
   border-radius: 4px;
+  position: absolute;
   transform-origin: center center;
 }
 
@@ -461,6 +461,18 @@ footer {
 .btn.primary:hover {
   filter: brightness(1.1);
   box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.btn.danger {
+  background: transparent;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.btn.danger:hover {
+  background: #ef4444;
+  color: white;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
 }
 
 .thumb-strip {

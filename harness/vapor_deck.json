@@ -1,0 +1,265 @@
+{
+  "session_id": "c070b2df-feb1-4588-a7a6-ff1afb888ed6",
+  "status": "done",
+  "mode": "build",
+  "text_model": "ollama/gemma4:31b-cloud",
+  "vision_model": "ollama/gemma4:31b-cloud",
+  "theme": "dark-tech",
+  "input_units": [
+    {
+      "unit_id": "99a183cd-1d28-4201-a1d2-8bef819aafcb",
+      "session_id": "c070b2df-feb1-4588-a7a6-ff1afb888ed6",
+      "file_hash": "dd9a411efd1a2b23de04c2cb2451be1c7ead3b9cf57e13e1f4b0e153353fa446",
+      "input_type": "text",
+      "role": "topic",
+      "filename": null,
+      "raw_path": null,
+      "chunks": [
+        {
+          "chunk_id": "4265cc76",
+          "text": "so the topic is blockcahin development and its future scope",
+          "token_count": 14,
+          "source_page": null
+        }
+      ],
+      "token_budget": 14,
+      "visual_summary": null,
+      "layout_hints": [],
+      "color_palette": [],
+      "font_hints": [],
+      "instructions_parsed": [],
+      "created_at": "2026-05-08T01:41:50.608465+00:00"
+    }
+  ],
+  "input_hash_index": {
+    "dd9a411efd1a2b23de04c2cb2451be1c7ead3b9cf57e13e1f4b0e153353fa446": "99a183cd-1d28-4201-a1d2-8bef819aafcb"
+  },
+  "topic": "Blockchain Development and Future Scope",
+  "derived_color_palette": [],
+  "derived_font_hints": [],
+  "hard_constraints": [],
+  "deck_context": {
+    "deck": {
+      "title": "Blockchain Development and Future Scope",
+      "theme": "dark-tech",
+      "total_slides": 7,
+      "audience": "Aspiring developers, tech entrepreneurs, and investors",
+      "tone": "Technical yet forward-looking"
+    },
+    "context": {
+      "key_terms_defined": [],
+      "concepts_covered": [
+        "Industrial Scaling"
+      ],
+      "facts_stated": [
+        "The focus is shifting from technical feasibility to industrial-grade deployment patterns."
+      ],
+      "running_narrative": "The presentation has reached its conclusion, summarizing the strategic outlook and the transition from experimental feasibility to industrial-scale deployment."
+    },
+    "slides_summary": [
+      {
+        "index": 7,
+        "title": "Summary and Strategic Outlook",
+        "covered": [
+          "Industrial Scaling",
+          "Strategic deployment patterns"
+        ],
+        "layout_style": "Grid-based takeaway cards with reveal animations and background glow"
+      }
+    ],
+    "synthesis": {
+      "topic": "Blockchain Development and Future Scope",
+      "audience": "Aspiring developers, tech entrepreneurs, and investors",
+      "tone": "Technical yet forward-looking",
+      "key_themes": [
+        "Foundations of Blockchain Development",
+        "Smart Contract Evolution",
+        "Scalability and Layer 2 Solutions",
+        "Decentralized Applications (dApps)",
+        "Industry Use-Cases and Future Trends"
+      ],
+      "key_facts": [
+        "Transition from Proof-of-Work to Proof-of-Stake for sustainability",
+        "The role of Ethereum, Solana, and Polkadot in the ecosystem",
+        "Integration of AI and Blockchain for automated governance",
+        "The shift toward interoperability between different blockchain networks"
+      ],
+      "narrative_arc": "The presentation will move from the technical basics of blockchain development to the current state of the ecosystem, culminating in a vision of how it will reshape global industries in the future.",
+      "hard_constraints": [],
+      "style_intent": {
+        "suggested_theme": "dark-tech",
+        "color_notes": "Deep navy, neon cyan, and electric purple accents",
+        "layout_preference": "Modern, grid-based layout with high-contrast data visualizations and futuristic iconography",
+        "extracted_palette": [],
+        "extracted_fonts": []
+      },
+      "input_unit_count": 1,
+      "reference_tokens_used": 0
+    }
+  },
+  "outline": [
+    {
+      "index": 1,
+      "title": "Blockchain Development and Future Scope",
+      "intent": "title-hero",
+      "key_points": [
+        "The evolution of decentralized ledger technology",
+        "Bridging the gap between code and commerce",
+        "A roadmap for developers and investors"
+      ],
+      "layout_hint": "hero-centered"
+    },
+    {
+      "index": 2,
+      "title": "Foundations of Blockchain Architecture",
+      "intent": "explain-concept",
+      "key_points": [
+        "Immutable ledgers and cryptographic hashing",
+        "Peer-to-peer networking fundamentals",
+        "The shift from Proof-of-Work to Proof-of-Stake",
+        "Sustainability and energy efficiency in consensus"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 3,
+      "title": "Smart Contract Logic and Execution",
+      "intent": "code-walkthrough",
+      "key_points": [
+        "Deterministic execution of self-executing contracts",
+        "Solidity and Rust: The languages of trust",
+        "Gas optimization and state management",
+        "Security auditing and vulnerability prevention"
+      ],
+      "layout_hint": "code-left"
+    },
+    {
+      "index": 4,
+      "title": "Solving the Scalability Trilemma",
+      "intent": "compare",
+      "key_points": [
+        "Layer 1 vs Layer 2 scaling solutions",
+        "Ethereum's modularity vs Solana's monolithic speed",
+        "Polkadot's parachains for native interoperability",
+        "Trade-offs between security, speed, and decentralization"
+      ],
+      "layout_hint": "two-column"
+    },
+    {
+      "index": 5,
+      "title": "Building Decentralized Applications (dApps)",
+      "intent": "explain-mechanism",
+      "key_points": [
+        "Frontend integration via Web3.js and Ethers.js",
+        "Decentralized storage with IPFS and Filecoin",
+        "User authentication through wallet connectivity",
+        "The role of Oracles in bringing real-world data"
+      ],
+      "layout_hint": "single-column"
+    },
+    {
+      "index": 6,
+      "title": "The Horizon: AI and Interoperability",
+      "intent": "list-points",
+      "key_points": [
+        "Integration of AI for automated DAO governance",
+        "Cross-chain communication protocols",
+        "Tokenization of real-world assets (RWA)",
+        "The move toward a seamless 'Internet of Blockchains'"
+      ],
+      "layout_hint": "bullet-list"
+    },
+    {
+      "index": 7,
+      "title": "Summary and Strategic Outlook",
+      "intent": "summary",
+      "key_points": [
+        "Transition from technical feasibility to industrial scale",
+        "Priority of interoperability and sustainability",
+        "Synergy between AI and decentralized trust",
+        "Opportunities for the next wave of developers"
+      ],
+      "layout_hint": "bullet-list"
+    }
+  ],
+  "slides": [
+    {
+      "index": 1,
+      "title": "Blockchain Development and Future Scope",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); text-align: center; position: relative; overflow: hidden;\">\n  <style>\n    .slide {\n      --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-glow));\n      padding: 2rem;\n    }\n    .hero-container {\n      position: relative;\n      z-index: 10;\n      max-width: 900px;\n      width: 100%;\n    }\n    .hero-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 5vw, 4.5rem);\n      line-height: 1.1;\n      margin-bottom: 1.5rem;\n      background: var(--accent-gradient);\n      -webkit-background-clip: text;\n      -webkit-text-fill-color: transparent;\n      font-weight: 800;\n    }\n    .hero-subtitle {\n      font-size: clamp(1rem, 2vw, 1.5rem);\n      color: var(--text-muted);\n      max-width: 700px;\n      margin: 0 auto 2rem auto;\n      line-height: 1.6;\n    }\n    .hero-pill {\n      display: inline-block;\n      padding: 0.5rem 1.2rem;\n      border: 1px solid var(--border);\n      border-radius: 50px;\n      font-size: clamp(0.7rem, 1.2vw, 1rem);\n      color: var(--accent);\n      background: rgba(var(--accent), 0.1);\n      text-transform: uppercase;\n      letter-spacing: 2px;\n      margin-bottom: 2rem;\n    }\n    .decorative-ring {\n      position: absolute;\n      border: 1px solid var(--border);\n      border-radius: 50%;\n      opacity: 0.3;\n      pointer-events: none;\n      animation: rotate 20s linear infinite;\n    }\n    @keyframes rotate {\n      from { transform: rotate(0deg); }\n      to { transform: rotate(360deg); }\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.8s ease forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes fadeInUp {\n      to { opacity: 1; transform: translateY(0); }\n    }\n  </style>\n\n  <!-- Decorative Elements -->\n  <div class=\"decorative-ring\" style=\"width: 80vh; height: 80vh; top: calc(50% - 40vh); left: calc(50% - 40vh);\"></div>\n  <div class=\"decorative-ring\" style=\"width: 60vh; height: 60vh; top: calc(50% - 30vh); left: calc(50% - 30vh); animation-direction: reverse;\"></div>\n\n  <div class=\"hero-container\">\n    <div class=\"reveal hero-pill visible\" style=\"--delay: 0.2s\">\n      Engineering the Decentralized Web\n    </div>\n    \n    <h1 class=\"reveal hero-title visible\" style=\"--delay: 0.4s\">\n      Blockchain Development and Future Scope\n    </h1>\n    \n    <p class=\"reveal hero-subtitle visible\" style=\"--delay: 0.6s\">\n      Exploring the evolution of decentralized ledger technology to bridge the gap between code and commerce. \n      A strategic roadmap for the next generation of developers and investors.\n    </p>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 2,
+      "title": "Foundations of Blockchain Architecture",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: grid;\n      grid-template-rows: auto 1fr;\n      padding: clamp(2rem, 5vh, 5rem);\n      gap: 2rem;\n      overflow: hidden;\n    }\n\n    .slide-header {\n      text-align: left;\n    }\n\n    .slide-header h1 {\n      font-family: var(--font-head);\n      font-size: clamp(1.8rem, 4vw, 3.5rem);\n      color: var(--accent);\n      margin: 0;\n      text-shadow: 0 0 15px var(--accent-glow);\n    }\n\n    .slide-content {\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\n      gap: 2rem;\n      align-items: start;\n    }\n\n    .concept-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: 1.5rem;\n      position: relative;\n      transition: transform 0.3s ease;\n    }\n\n    .concept-card:hover {\n      border-color: var(--accent);\n      transform: translateY(-5px);\n    }\n\n    .concept-card h2 {\n      font-family: var(--font-head);\n      font-size: clamp(1.2rem, 2vw, 1.8rem);\n      color: var(--accent);\n      margin-top: 0;\n    }\n\n    .concept-card p {\n      font-size: clamp(0.9rem, 1.5vw, 1.1rem);\n      line-height: 1.6;\n      color: var(--text-muted);\n    }\n\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n\n    .tag {\n      display: inline-block;\n      font-size: 0.7rem;\n      text-transform: uppercase;\n      letter-spacing: 1px;\n      background: var(--accent-glow);\n      color: var(--text);\n      padding: 2px 8px;\n      border-radius: 4px;\n      margin-bottom: 1rem;\n    }\n  </style>\n\n  <div class=\"slide-header\">\n    <h1 class=\"reveal visible\" style=\"--delay: 0.1s\">Foundations of Blockchain Architecture</h1>\n  </div>\n\n  <div class=\"slide-content\">\n    <div class=\"concept-card reveal visible\" style=\"--delay: 0.3s\">\n      <span class=\"tag\">Data Integrity</span>\n      <h2>Immutable Ledgers</h2>\n      <p>Cryptographic hashing ensures that once data is written to a block, it cannot be altered without changing every subsequent block. This creates a verifiable, permanent history of transactions.</p>\n      <p><strong>Core:</strong> SHA-256 • Merkle Trees • Chain-of-Trust</p>\n    </div>\n\n    <div class=\"concept-card reveal visible\" style=\"--delay: 0.5s\">\n      <span class=\"tag\">Network Layer</span>\n      <h2>P2P Networking</h2>\n      <p>Distributed nodes maintain the ledger without a central authority. Gossiping protocols ensure state synchronization across the globe with high fault tolerance.</p>\n      <p><strong>Core:</strong> Node Discovery • Gossip Protocols • Decentralization</p>\n    </div>\n\n    <div class=\"concept-card reveal visible\" style=\"--delay: 0.7s\">\n      <span class=\"tag\">Consensus Evolution</span>\n      <h2>The PoW to PoS Shift</h2>\n      <p>Moving from computationally expensive Proof-of-Work (mining) to Proof-of-Stake (validators) drastically reduces the carbon footprint and energy requirements.</p>\n      <p><strong>Impact:</strong> &gt;99% energy reduction • Higher Scalability • Sustainable Growth</p>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 3,
+      "title": "Smart Contract Logic and Execution",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; background-color: var(--bg); color: var(--text); font-family: var(--font-body); display: flex; flex-direction: column; overflow: hidden;\">\n  <style>\n    .slide-grid {\n      display: grid;\n      grid-template-columns: 1.2fr 0.8fr;\n      gap: 2rem;\n      padding: 2rem;\n      height: calc(100% - 80px);\n      align-items: center;\n    }\n    .slide-header {\n      padding: 2rem 2rem 0 2rem;\n      font-family: var(--font-head);\n    }\n    .slide-title {\n      font-size: clamp(1.5rem, 3vw, 2.5rem);\n      color: var(--text);\n      margin: 0;\n    }\n    .code-container {\n      background: var(--code-bg);\n      border: 1px solid var(--border);\n      border-radius: 8px;\n      padding: 1rem;\n      position: relative;\n      box-shadow: 0 10px 30px rgba(0,0,0,0.5);\n    }\n    .code-container pre {\n      margin: 0;\n      font-family: 'Cascadia Code', 'Fira Code', monospace;\n      font-size: clamp(0.8rem, 1.2vw, 1.1rem);\n      line-height: 1.5;\n    }\n    .content-list {\n      list-style: none;\n      padding: 0;\n    }\n    .content-item {\n      margin-bottom: 1.5rem;\n      padding-left: 1.5rem;\n      border-left: 3px solid var(--accent);\n      transition: transform 0.3s ease;\n    }\n    .content-item:hover {\n      transform: translateX(10px);\n    }\n    .item-title {\n      font-weight: bold;\n      font-size: clamp(1rem, 1.5vw, 1.25rem);\n      color: var(--accent);\n      display: block;\n      margin-bottom: 0.25rem;\n    }\n    .item-desc {\n      font-size: clamp(0.9rem, 1.2vw, 1rem);\n      color: var(--text-muted);\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to { opacity: 1; transform: translateY(0); }\n    }\n    .highlight-line {\n      background: rgba(var(--accent-glow), 0.2);\n      display: block;\n      width: 100%;\n    }\n  </style>\n\n  <div class=\"slide-header\">\n    <h1 class=\"slide-title\">Smart Contract Logic and Execution</h1>\n  </div>\n\n  <div class=\"slide-grid\">\n    <div class=\"code-container reveal visible\" style=\"--delay: 0.2s\">\n      <pre class=\"language-solidity\" tabindex=\"0\"><code class=\"language-solidity\">\ncontract Vault {\n    // State management: Storage costs Gas\n    mapping(address =&gt; uint256) public balances;\n\n    function deposit() external payable {\n        // Deterministic logic: No random API calls\n        require(msg.value &gt; 0, \"Must send ETH\");\n        \n        // Gas optimization: Local cache of state\n        uint256 currentBal = balances[msg.sender];\n        balances[msg.sender] = currentBal + msg.value;\n    }\n\n    function withdraw(uint256 _amount) external {\n        // Security: Check-Effects-Interactions pattern\n        require(balances[msg.sender] &gt;= _amount, \"Insufficient\");\n        \n        balances[msg.sender] -= _amount;\n        payable(msg.sender).transfer(_amount);\n    }\n}\n      </code></pre>\n    </div>\n\n    <div class=\"content-area\">\n      <ul class=\"content-list\">\n        <li class=\"content-item reveal visible\" style=\"--delay: 0.4s\">\n          <span class=\"item-title\">Deterministic Execution</span>\n          <span class=\"item-desc\">Contracts must behave identically across all nodes. No external API calls; all data must be on-chain.</span>\n        </li>\n        <li class=\"content-item reveal visible\" style=\"--delay: 0.6s\">\n          <span class=\"item-title\">Solidity &amp; Rust</span>\n          <span class=\"item-desc\">Industry standards for trust: Solidity (EVM) and Rust (Solana/Polkadot) focus on memory safety and strict typing.</span>\n        </li>\n        <li class=\"content-item reveal visible\" style=\"--delay: 0.8s\">\n          <span class=\"item-title\">Gas &amp; State Optimization</span>\n          <span class=\"item-desc\">Every state change costs \"Gas\". Optimizing storage slots is critical for scalability and cost-reduction.</span>\n        </li>\n        <li class=\"content-item reveal visible\" style=\"--delay: 1.0s\">\n          <span class=\"item-title\">Security Auditing</span>\n          <span class=\"item-desc\">Preventing re-entrancy and integer overflows through formal verification and rigorous peer review.</span>\n        </li>\n      </ul>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 4,
+      "title": "Solving the Scalability Trilemma",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); padding: 2rem; position: relative; overflow: hidden;\">\n  <style>\n    .slide-grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 2rem;\n      width: 100%;\n      max-width: 1200px;\n      margin-top: 2rem;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      text-align: center;\n      margin-bottom: 1rem;\n    }\n    .comparison-card {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 1rem;\n      padding: 1.5rem;\n      box-shadow: 0 0 20px var(--accent-glow);\n      transition: transform 0.3s ease;\n    }\n    .card-header {\n      font-family: var(--font-head);\n      font-size: clamp(1.2rem, 2vw, 1.8rem);\n      color: var(--accent);\n      margin-bottom: 1rem;\n      border-bottom: 2px solid var(--border);\n      padding-bottom: 0.5rem;\n      display: flex;\n      justify-content: space-between;\n      align-items: center;\n    }\n    .point-list {\n      list-style: none;\n      padding: 0;\n      margin: 0;\n    }\n    .point-item {\n      margin-bottom: 1rem;\n      font-size: clamp(0.9rem, 1.5vw, 1.2rem);\n      line-height: 1.5;\n      color: var(--text-muted);\n      display: flex;\n      align-items: flex-start;\n      gap: 0.5rem;\n    }\n    .point-item strong {\n      color: var(--text);\n      display: block;\n    }\n    .trilemma-footer {\n      margin-top: 3rem;\n      text-align: center;\n      padding: 1rem;\n      background: var(--code-bg);\n      border-radius: 0.5rem;\n      font-size: clamp(0.8rem, 1.2vw, 1rem);\n      color: var(--text-muted);\n      border: 1px dashed var(--border);\n      max-width: 800px;\n      margin-left: auto;\n      margin-right: auto;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: revealIn 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes revealIn {\n      to { opacity: 1; transform: translateY(0); }\n    }\n    .badge {\n      font-size: 0.7rem;\n      padding: 0.2rem 0.5rem;\n      border-radius: 4px;\n      background: var(--accent);\n      color: var(--bg);\n      text-transform: uppercase;\n      font-weight: bold;\n    }\n  </style>\n\n  <h1 class=\"slide-title reveal visible\" style=\"--delay: 0s\">Solving the Scalability Trilemma</h1>\n\n  <div class=\"slide-grid\">\n    <!-- Left Column: Modular & Layered -->\n    <div class=\"comparison-card reveal visible\" style=\"--delay: 0.2s\">\n      <div class=\"card-header\">\n        <span>Modular Approach</span>\n        <span class=\"badge\">Decentralized</span>\n      </div>\n      <ul class=\"point-list\">\n        <li class=\"point-item\">\n          <div>\n            <strong>Ethereum &amp; Layer 2s</strong>\n            Offloads execution to Rollups (Optimism, Arbitrum) while retaining L1 security.\n          </div>\n        </li>\n        <li class=\"point-item\">\n          <div>\n            <strong>Polkadot Parachains</strong>\n            Native interoperability via a Relay Chain, allowing specialized shards to scale independently.\n          </div>\n        </li>\n        <li class=\"point-item\">\n          <div>\n            <strong>The Trade-off</strong>\n            Prioritizes <em>Security &amp; Decentralization</em>; accepts slight complexity in user experience (bridging).\n          </div>\n        </li>\n      </ul>\n    </div>\n\n    <!-- Right Column: Monolithic & Integrated -->\n    <div class=\"comparison-card reveal visible\" style=\"--delay: 0.4s\">\n      <div class=\"card-header\">\n        <span>Monolithic Approach</span>\n        <span class=\"badge\">High Speed</span>\n      </div>\n      <ul class=\"point-list\">\n        <li class=\"point-item\">\n          <div>\n            <strong>Solana's Architecture</strong>\n            Single-state machine with Proof-of-History for massive throughput and sub-second finality.\n          </div>\n        </li>\n        <li class=\"point-item\">\n          <div>\n            <strong>Layer 1 Scaling</strong>\n            Vertical scaling through high-spec hardware and optimized parallel execution (Sealevel).\n          </div>\n        </li>\n        <li class=\"point-item\">\n          <div>\n            <strong>The Trade-off</strong>\n            Prioritizes <em>Speed &amp; Performance</em>; faces challenges in hardware accessibility for validators.\n          </div>\n        </li>\n      </ul>\n    </div>\n  </div>\n\n  <div class=\"trilemma-footer reveal visible\" style=\"--delay: 0.6s\">\n    <strong>The Trilemma:</strong> Security ⬌ Speed ⬌ Decentralization. <br>\n    No single architecture solves all three perfectly; solutions are selected based on the specific use-case requirements.\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 5,
+      "title": "Building Decentralized Applications (dApps)",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); padding: 2rem;\">\n  <style>\n    .slide-content {\n      max-width: 900px;\n      width: 100%;\n      text-align: left;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(1.5rem, 4vw, 3rem);\n      color: var(--accent);\n      margin-bottom: 2rem;\n      text-shadow: 0 0 10px var(--accent-glow);\n    }\n    .dapp-architecture {\n      display: flex;\n      flex-direction: column;\n      gap: 1.5rem;\n      position: relative;\n    }\n    .arch-step {\n      display: grid;\n      grid-template-columns: auto 1fr;\n      gap: 1.5rem;\n      align-items: center;\n      background: var(--surface);\n      border: 1px solid var(--border);\n      padding: 1.5rem;\n      border-radius: 12px;\n      transition: transform 0.3s ease;\n    }\n    .arch-step:hover {\n      border-color: var(--accent);\n      transform: translateX(10px);\n    }\n    .step-number {\n      font-family: var(--font-head);\n      font-size: 2rem;\n      color: var(--accent);\n      font-weight: bold;\n      text-align: center;\n      line-height: 1;\n    }\n    .step-text h3 {\n      font-family: var(--font-head);\n      margin: 0 0 0.5rem 0;\n      font-size: clamp(1.1rem, 2vw, 1.5rem);\n    }\n    .step-text p {\n      margin: 0;\n      color: var(--text-muted);\n      font-size: clamp(0.9rem, 1.8vw, 1.1rem);\n      line-height: 1.5;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n    .connector {\n      width: 2px;\n      height: 20px;\n      background: var(--border);\n      margin-left: 2rem;\n    }\n  </style>\n\n  <div class=\"slide-content\">\n    <h1 class=\"slide-title reveal visible\" style=\"--delay: 0.2s\">Building Decentralized Applications (dApps)</h1>\n    \n    <div class=\"dapp-architecture\">\n      <div class=\"arch-step reveal visible\" style=\"--delay: 0.5s\">\n        <div class=\"step-number\">01</div>\n        <div class=\"step-text\">\n          <h3>Wallet Connectivity &amp; Auth</h3>\n          <p>Replacing traditional passwords with cryptographic signatures. Users authenticate via providers like MetaMask or WalletConnect to establish identity.</p>\n        </div>\n      </div>\n\n      <div class=\"connector reveal visible\" style=\"--delay: 0.7s\"></div>\n\n      <div class=\"arch-step reveal visible\" style=\"--delay: 0.9s\">\n        <div class=\"step-number\">02</div>\n        <div class=\"step-text\">\n          <h3>Frontend Integration</h3>\n          <p>Using <strong>Ethers.js</strong> or <strong>Web3.js</strong> as the bridge to communicate with the blockchain, calling smart contract functions and listening to events.</p>\n        </div>\n      </div>\n\n      <div class=\"connector reveal visible\" style=\"--delay: 1.1s\"></div>\n\n      <div class=\"arch-step reveal visible\" style=\"--delay: 1.3s\">\n        <div class=\"step-number\">03</div>\n        <div class=\"step-text\">\n          <h3>Decentralized Storage</h3>\n          <p>Offloading heavy assets from the chain. <strong>IPFS</strong> and <strong>Filecoin</strong> ensure content-addressed persistence for metadata, images, and documents.</p>\n        </div>\n      </div>\n\n      <div class=\"connector reveal visible\" style=\"--delay: 1.5s\"></div>\n\n      <div class=\"arch-step reveal visible\" style=\"--delay: 1.7s\">\n        <div class=\"step-number\">04</div>\n        <div class=\"step-text\">\n          <h3>The Oracle Layer</h3>\n          <p>Bridging the gap between on-chain logic and off-chain reality. Oracles (e.g., Chainlink) feed real-world price data, weather, or API results into smart contracts.</p>\n        </div>\n      </div>\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 6,
+      "title": "The Horizon: AI and Interoperability",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 5% 8%; background-color: var(--bg); color: var(--text); font-family: var(--font-body);\">\n  <style>\n    .slide {\n      position: relative;\n      overflow: hidden;\n    }\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--accent);\n      margin-bottom: 2rem;\n      text-shadow: 0 0 20px var(--accent-glow);\n      border-left: 6px solid var(--accent);\n      padding-left: 1.5rem;\n    }\n    .bullet-container {\n      list-style: none;\n      padding: 0;\n      margin: 0;\n      width: 100%;\n      max-width: 800px;\n    }\n    .bullet-item {\n      display: flex;\n      align-items: center;\n      font-size: clamp(1.1rem, 2.2vw, 1.8rem);\n      margin-bottom: 1.5rem;\n      padding: 1rem 1.5rem;\n      background: var(--surface);\n      border: 1px solid var(--border);\n      border-radius: 8px;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n    }\n    .bullet-item:hover {\n      transform: translateX(10px);\n      border-color: var(--accent);\n    }\n    .bullet-item::before {\n      content: '→';\n      color: var(--accent);\n      margin-right: 1rem;\n      font-weight: bold;\n    }\n    .reveal {\n      opacity: 0;\n      transform: translateY(20px);\n      transition: all 0.6s ease-out;\n    }\n    .reveal.visible {\n      opacity: 1;\n      transform: translateY(0);\n    }\n  </style>\n\n  <h1 class=\"slide-title reveal visible\" style=\"--delay: 0.1s\">The Horizon: AI and Interoperability</h1>\n  \n  <ul class=\"bullet-container\">\n    <li class=\"bullet-item reveal visible\" style=\"--delay: 0.3s\">Integration of AI for automated DAO governance</li>\n    <li class=\"bullet-item reveal visible\" style=\"--delay: 0.5s\">Cross-chain communication protocols</li>\n    <li class=\"bullet-item reveal visible\" style=\"--delay: 0.7s\">Tokenization of real-world assets (RWA)</li>\n    <li class=\"bullet-item reveal visible\" style=\"--delay: 0.9s\">The move toward a seamless 'Internet of Blockchains'</li>\n  </ul>\n\n  \n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    },
+    {
+      "index": 7,
+      "title": "Summary and Strategic Outlook",
+      "html": "<section class=\"slide\" style=\"width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box;\">\n  <style>\n    .slide {\n      background-color: var(--bg);\n      color: var(--text);\n      font-family: var(--font-body);\n      display: flex;\n      flex-direction: column;\n      justify-content: center;\n      align-items: center;\n      padding: clamp(2rem, 5vw, 5rem);\n      position: relative;\n      overflow: hidden;\n    }\n\n    .slide-content {\n      max-width: 900px;\n      width: 100%;\n      z-index: 2;\n    }\n\n    .slide-title {\n      font-family: var(--font-head);\n      font-size: clamp(2rem, 4vw, 3.5rem);\n      color: var(--text);\n      margin-bottom: 2rem;\n      text-align: left;\n      border-left: 6px solid var(--accent);\n      padding-left: 1.5rem;\n      line-height: 1.1;\n    }\n\n    .takeaways-container {\n      display: grid;\n      gap: 1.5rem;\n    }\n\n    .takeaway-item {\n      background: var(--surface);\n      border: 1px solid var(--border);\n      padding: 1.5rem;\n      border-radius: 0.75rem;\n      display: flex;\n      align-items: flex-start;\n      transition: transform 0.3s ease, border-color 0.3s ease;\n      opacity: 0;\n      transform: translateY(20px);\n    }\n\n    .takeaway-item.reveal {\n      animation: fadeInUp 0.6s forwards;\n      animation-delay: var(--delay);\n    }\n\n    .takeaway-item:hover {\n      border-color: var(--accent);\n      transform: translateX(10px);\n    }\n\n    .icon-bullet {\n      color: var(--accent);\n      font-weight: bold;\n      margin-right: 1rem;\n      font-size: 1.2em;\n      flex-shrink: 0;\n    }\n\n    .takeaway-text {\n      font-size: clamp(1.1rem, 2vw, 1.5rem);\n      line-height: 1.4;\n    }\n\n    .takeaway-text strong {\n      color: var(--accent);\n      font-weight: 600;\n    }\n\n    .closing-cta {\n      margin-top: 3rem;\n      text-align: center;\n      font-size: clamp(1rem, 1.5vw, 1.25rem);\n      color: var(--text-muted);\n      font-style: italic;\n      opacity: 0;\n    }\n\n    .closing-cta.reveal {\n      animation: fadeIn 1s forwards;\n      animation-delay: 2.5s;\n    }\n\n    @keyframes fadeInUp {\n      to {\n        opacity: 1;\n        transform: translateY(0);\n      }\n    }\n\n    @keyframes fadeIn {\n      to {\n        opacity: 1;\n      }\n    }\n\n    .bg-glow {\n      position: absolute;\n      top: 50%;\n      right: 10%;\n      width: 30vw;\n      height: 30vw;\n      background: var(--accent-glow);\n      filter: blur(100px);\n      border-radius: 50%;\n      z-index: 1;\n      opacity: 0.3;\n      pointer-events: none;\n    }\n  </style>\n\n  <div class=\"bg-glow\"></div>\n\n  <div class=\"slide-content\">\n    <h1 class=\"slide-title\">Summary and Strategic Outlook</h1>\n    \n    <div class=\"takeaways-container\">\n      <div class=\"takeaway-item reveal visible\" style=\"--delay: 0.2s\">\n        <span class=\"icon-bullet\">▹</span>\n        <div class=\"takeaway-text\">\n          <strong>Industrial Scaling:</strong> Moving beyond technical feasibility to implement robust, industrial-grade deployment patterns.\n        </div>\n      </div>\n\n      <div class=\"takeaway-item reveal visible\" style=\"--delay: 0.4s\">\n        <span class=\"icon-bullet\">▹</span>\n        <div class=\"takeaway-text\">\n          <strong>Foundational Principles:</strong> prioritizing <strong>interoperability</strong> across stacks and <strong>long-term sustainability</strong> in resource consumption.\n        </div>\n      </div>\n\n      <div class=\"takeaway-item reveal visible\" style=\"--delay: 0.6s\">\n        <span class=\"icon-bullet\">▹</span>\n        <div class=\"takeaway-text\">\n          <strong>The Synergy:</strong> Leveraging the intersection of <strong>Generative AI</strong> and <strong>Decentralized Trust</strong> to automate verification and governance.\n        </div>\n      </div>\n\n      <div class=\"takeaway-item reveal visible\" style=\"--delay: 0.8s\">\n        <span class=\"icon-bullet\">▹</span>\n        <div class=\"takeaway-text\">\n          <strong>Developer Frontier:</strong> Massive opportunities for the next wave of developers to build primitives for a trustless web.\n        </div>\n      </div>\n    </div>\n\n    <div class=\"closing-cta reveal visible\">\n      The infrastructure is ready. Now it is time to build.\n    </div>\n  </div>\n</section>",
+      "snapshot_b64": null,
+      "snapshot_url": null,
+      "audit": null,
+      "approved": true,
+      "status": "draft",
+      "metadata": {}
+    }
+  ],
+  "current_index": 7
+}

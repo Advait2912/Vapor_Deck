@@ -251,3 +251,14 @@ export async function removeOutlineSlide(sessionId, slideN) {
   });
   return response.json();
 }
+/**
+ * Export specific slides to PDF.
+ */
+export async function exportSlides(sessionId, data) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/export/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return response;
+}

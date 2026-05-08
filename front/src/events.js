@@ -124,6 +124,22 @@ export function setupEventListeners(actions) {
     }
   });
 
+  if (elements.endSessionBtn) {
+    elements.endSessionBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to completely end this session? All unexported progress will be cleared.')) {
+        onNewDeck();
+      }
+    });
+  }
+
+  // Mode Toggles
+  if (elements.planModeBtn) {
+    elements.planModeBtn.addEventListener('click', () => onSwitchMode('plan'));
+  }
+  if (elements.buildModeBtn) {
+    elements.buildModeBtn.addEventListener('click', () => onSwitchMode('build'));
+  }
+
   // Custom Event for per-slide generation
   window.addEventListener('generate-slide', (e) => {
     onStartSlideGeneration(e.detail.index);

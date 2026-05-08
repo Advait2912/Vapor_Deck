@@ -1,0 +1,107 @@
+
+
+  <div id="slide-scaler" style="transform: scale(1); margin-left: 207px; margin-top: 0px;"><section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--bg); color: var(--text); font-family: var(--font-body); padding: 2rem; overflow: hidden;">
+  <style>
+    .slide {
+      --delay-1: 0.2s;
+      --delay-2: 0.4s;
+      --delay-3: 0.6s;
+    }
+    .slide-content {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    .slide-title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      color: var(--text);
+      text-align: center;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    .slide-title::after {
+      content: '';
+      display: block;
+      width: 60px;
+      height: 4px;
+      background: var(--accent);
+      margin: 0.5rem auto;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .concept-grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+    .concept-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      border-radius: 8px;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+    .concept-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-5px);
+    }
+    .card-label {
+      color: var(--accent);
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.1rem;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .card-text {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: revealIn 0.6s forwards ease-out;
+      animation-delay: var(--delay);
+    }
+    @keyframes revealIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+
+  <div class="slide-content">
+    <h1 class="slide-title reveal visible" style="--delay: var(--delay-1);">New Slide 8</h1>
+    
+    <div class="concept-grid">
+      <div class="concept-card reveal visible" style="--delay: var(--delay-2);">
+        <span class="card-label">Core Principle</span>
+        <p class="card-text">
+          <strong>Key point 1:</strong> Implementation of the primary concept focusing on scalability and modular architecture to ensure long-term maintainability.
+        </p>
+      </div>
+      
+      <div class="concept-card reveal visible" style="--delay: var(--delay-3);">
+        <span class="card-label">Technical Impact</span>
+        <p class="card-text">
+          <strong>Key point 2:</strong> Optimization of performance metrics by reducing overhead and streamlining the data flow between decoupled components.
+        </p>
+      </div>
+    </div>
+  </div>
+</section></div>
+
+  <!-- Prism Core & Languages -->
+  
+  
+  
+  
+  
+
+  
+
+

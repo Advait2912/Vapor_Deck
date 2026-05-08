@@ -6,7 +6,7 @@
  * NEW in this version:
  *   - Uses renderer/index.js (isolated iframe renderer) for slide rendering
  *   - Integrates comparison.js for split-view refinement
- *   - Integrates export.js for PDF export
+ *   - Initializes app state and persists to local storage
  *   - Integrates global_control.js in sidebar
  *   - Calls /snapshot route after slide generation (vision audit)
  *   - Per-slide lifecycle states (PLANNING → BUILDING → REVIEWING → APPROVED)
@@ -37,6 +37,7 @@ import {
   updateMode,
   sendPlanChat,
   takeSnapshot,
+  exportSlides,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -45,8 +46,7 @@ import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
 
 // ── New modules ────────────────────────────────────────────────────────────────
-import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer } from './renderer/index.js';
-import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
+import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer, stripFences } from './renderer/index.js';
 import { renderGlobalControls, globalState, addSlideToOutline, reorderSlides } from './ui/global_control.js';
 import {
   comparisonState,
@@ -116,6 +116,7 @@ function persistSessionViewState() {
     messages: state.messages || [],
     slidePhases: state.slidePhases || {},
     slideAudits: state.slideAudits || {},  // persist audit results across navigation/reload
+    exportSnapshots: state.exportSnapshots || {},  // frozen slide HTML for PDF export
   };
   try {
     localStorage.setItem(getSessionViewKey(state.sessionId), JSON.stringify(payload));
@@ -292,6 +293,8 @@ async function init() {
   updateUI();
   mountGlobalControlsInSidebar();
 
+  setupIframeScaler(); // Initialize iframe scaling
+
   if (!state.outline.length) {
     mountPlaceholder(elements.slideIframe, 'Slide Preview Area');
   }
@@ -422,6 +425,7 @@ async function loadProjectInfo() {
         slidePhases: cached.slidePhases || {},
         slideAudits: cached.slideAudits || {},  // restore audit results from cache
         auditingSlides: {},                      // always start fresh, never restore in-flight audits
+        exportSnapshots: cached.exportSnapshots || {},  // restore frozen export HTML
       });
 
       if (state.messages.length > 0) {
@@ -478,6 +482,7 @@ async function handleNewDeck() {
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
     generatingSlides: {}, slidePhases: {}, currentIndex: 0,
     slideAudits: {}, auditingSlides: {},  // clear all audit state
+    exportSnapshots: {},  // clear export snapshots
     currentSlideHtml: '', status: 'IDLE', phase: 'CONTENT',
     mode: 'plan', projectPath: state.projectPath
   });
@@ -1093,7 +1098,68 @@ function showAuditToast(message, type = 'info') {
   }, 6000);
 }
 
-// ── Slide Approval removed in favor of live flow ──────────────────────────────────
+async function approveSlide() {
+  try {
+    // ── Capture WYSIWYG snapshot from live iframe for export ─────────────────
+    const exportHtml = _captureCurrentSlideFromIframe();
+    const html = exportHtml || state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+
+    if (!html?.trim()) {
+      mountPlaceholder(elements.slideIframe, 'Generate this slide first, then approve.');
+      return;
+    }
+    const approvedIndex = state.currentIndex;
+    const slideNum = approvedIndex + 1;
+    state.status = 'APPROVING';
+    updateUI();
+
+    // Read the audit from slideAudits — NOT from draftSlides which is a raw HTML string
+    const audit = state.slideAudits[approvedIndex] || null;
+
+    // ── Freeze this slide's HTML+CSS into the export snapshots array ────────
+    // This is the single source of truth for PDF export.
+    state.exportSnapshots[approvedIndex] = stripFences(exportHtml || html);
+    console.log(`[Export] Snapshot frozen for slide ${slideNum}`);
+
+    state.slides = state.slides.filter(s => s.index !== approvedIndex);
+    state.slides.push({ 
+      index: approvedIndex, 
+      html,
+      audit: audit // Preserve the vision audit result for the backend
+    });
+    state.latestSlides[approvedIndex] = html;
+    delete state.draftSlides[approvedIndex];
+    delete state.generatingSlides[approvedIndex];
+
+    if (approvedIndex < state.outline.length - 1) {
+      const nextPending = state.outline.findIndex((_, idx) => {
+        return !state.slides.some(s => s.index === idx);
+      });
+      state.currentIndex = nextPending >= 0 ? nextPending : approvedIndex;
+      const hasDraft = !!state.draftSlides[state.currentIndex];
+      state.status = hasDraft ? 'REVIEWING' : 'GENERATING';
+      renderOutline(navigateToSlide);
+      updateUI();
+      if (hasDraft) {
+        mountSlide(elements.slideIframe, state.draftSlides[state.currentIndex], state.theme);
+      } else {
+        mountPlaceholder(elements.slideIframe, `Slide ${state.currentIndex + 1} not built yet.`);
+      }
+    } else {
+      state.status = 'DONE';
+      updateUI();
+      renderOutline(navigateToSlide);
+      mountPlaceholder(elements.slideIframe, '🎉 Deck Complete! All slides approved. Export PDF.');
+    }
+    persistSessionViewState();
+    approveSlideApi(state.sessionId, slideNum, html).catch(err => console.error('Approval sync failed:', err));
+  } catch (error) {
+    console.error('Approval failed:', error);
+    state.status = 'REVIEWING';
+    updateUI();
+  }
+}
+
 
 // ── Slide Refinement ──────────────────────────────────────────────────────────
 async function startRefinement(mode, instruction = '') {
@@ -1267,26 +1333,119 @@ async function stopConversation() {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the slide HTML from the live iframe DOM.
+ * Grabs inline <style> blocks from the iframe's <head> (per-slide scoped styles)
+ * and the actual slide content from <body>, stripping #slide-scaler and scripts.
+ */
+function _captureCurrentSlideFromIframe() {
+  const iframe = elements.slideIframe;
+  if (!iframe?.contentDocument?.body) return null;
+
+  const doc = iframe.contentDocument;
+  let parts = [];
+
+  // 1. Grab all inline <style> from the iframe <head> (skip linked stylesheets)
+  const headStyles = doc.querySelectorAll('head style');
+  headStyles.forEach(styleEl => {
+    // Skip the base iframe styles (box-sizing, body margin, scaler, reveal, audit)
+    // We only want the LLM-generated per-slide styles
+    const text = styleEl.textContent || '';
+    if (text.includes('#slide-scaler') || text.includes('body.audit-mode')) return;
+    parts.push(`<style>${text}</style>`);
+  });
+
+  // 2. Grab slide content from body
+  //    The iframe wraps everything in <div id="slide-scaler">, dig inside it
+  const scaler = doc.getElementById('slide-scaler');
+  const source = scaler || doc.body;
+  const clone = source.cloneNode(true);
+
+  // Remove all <script> tags
+  const scripts = clone.getElementsByTagName('script');
+  for (let i = scripts.length - 1; i >= 0; i--) {
+    scripts[i].parentNode.removeChild(scripts[i]);
+  }
+
+  parts.push(clone.innerHTML);
+  return parts.join('\n');
+}
+
 async function handleExport() {
-  if (!state.sessionId) return;
-  const count = getExportableSlideCount();
-  if (count === 0) {
-    alert('No slides to export yet. Generate at least one slide first.');
+  if (!state.sessionId || !state.outline.length) {
+    alert('No slides to export. Please generate and approve some slides first.');
     return;
   }
+
+  // Check how many slides have been approved (have export snapshots)
+  const snapshotCount = Object.keys(state.exportSnapshots).length;
+  if (snapshotCount === 0) {
+    alert('No approved slides to export. Approve at least one slide first.');
+    return;
+  }
+
   try {
-    elements.exportBtn.textContent = 'Preparing...';
+    elements.exportBtn.textContent = 'Exporting...';
     elements.exportBtn.disabled = true;
-    // Use new export module (window.print() based)
-    exportDeckAsPDF();
+
+    // Build the slide array sorted by index — only approved snapshots
+    const slideData = [];
+    const sortedIndices = Object.keys(state.exportSnapshots)
+      .map(Number)
+      .sort((a, b) => a - b);
+
+    for (const idx of sortedIndices) {
+      slideData.push(state.exportSnapshots[idx]);
+    }
+
+    const theme = state.theme || 'dark-tech';
+    console.log(`Exporting ${slideData.length} approved slides to PDF (theme: ${theme})`);
+
+    const response = await exportSlides(state.sessionId, { slides: slideData, theme });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Export failed' }));
+      throw new Error(error.detail || 'Export failed');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vapor_deck_${state.sessionId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
   } catch (error) {
     console.error('Export failed:', error);
+    alert(`Export failed: ${error.message}`);
   } finally {
-    setTimeout(() => {
-      elements.exportBtn.textContent = 'Export PDF';
-      elements.exportBtn.disabled = false;
-    }, 1000);
+    elements.exportBtn.textContent = 'Export PDF';
+    elements.exportBtn.disabled = false;
   }
+}
+
+// ── Fixed resolution scaling for iframe ──────────────────────────────────────
+function setupIframeScaler() {
+  const container = document.getElementById('preview-container');
+  const iframe = document.getElementById('slide-iframe');
+  if (!container || !iframe) return;
+
+  const observer = new ResizeObserver(entries => {
+    for (let entry of entries) {
+      const w = entry.contentRect.width;
+      const h = entry.contentRect.height;
+      // Leave some padding
+      const scaleX = (w - 40) / 1280;
+      const scaleY = (h - 40) / 720;
+      const scale = Math.min(scaleX, scaleY);
+      iframe.style.transform = `scale(${scale})`;
+    }
+  });
+  observer.observe(container);
 }
 
 // ── Manual Re-audit ──────────────────────────────────────────────────────────

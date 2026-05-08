@@ -11,6 +11,9 @@ export const elements = {
   slideIframe: document.getElementById('slide-iframe'),
   themeSelect: document.getElementById('theme-select'),
   modelSelect: document.getElementById('model-select'),
+  newDeckBtn: document.getElementById('new-deck-btn'),
+  endSessionBtn: document.getElementById('end-session-btn'),
+  approveBtn: document.getElementById('approve-btn'),
   customRegenBtn: document.getElementById('custom-regen-btn'),
   stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),
@@ -413,17 +416,13 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
       overflow: hidden;
       background: #000;
     }
-
   </style>
 </head>
 <body>
-  <div id="slide-container" style="width: 100%; height: 100%;">
-    ${html}
-  </div>
+  ${html}
   <script>
     setTimeout(() => {
       document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
-      window.parent.scaleIframe(); // Trigger parent scaler once layout stabilizes
     }, 80);
   </script>
 </body>

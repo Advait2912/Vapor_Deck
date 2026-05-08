@@ -1,0 +1,126 @@
+<section class="slide" style="width: 100%; height: 100%; min-height: 100vh; box-sizing: border-box; background-color: var(--bg); color: var(--text); font-family: var(--font-body); display: flex; flex-direction: column; overflow: hidden;">
+  <style>
+    .slide-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 2rem;
+      padding: 2rem;
+      height: calc(100% - 80px);
+      align-items: center;
+    }
+    .slide-header {
+      padding: 2rem 2rem 0 2rem;
+      font-family: var(--font-head);
+    }
+    .slide-title {
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
+      color: var(--text);
+      margin: 0;
+    }
+    .code-container {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .code-container pre {
+      margin: 0;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: clamp(0.8rem, 1.2vw, 1.1rem);
+      line-height: 1.5;
+    }
+    .content-list {
+      list-style: none;
+      padding: 0;
+    }
+    .content-item {
+      margin-bottom: 1.5rem;
+      padding-left: 1.5rem;
+      border-left: 3px solid var(--accent);
+      transition: transform 0.3s ease;
+    }
+    .content-item:hover {
+      transform: translateX(10px);
+    }
+    .item-title {
+      font-weight: bold;
+      font-size: clamp(1rem, 1.5vw, 1.25rem);
+      color: var(--accent);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    .item-desc {
+      font-size: clamp(0.9rem, 1.2vw, 1rem);
+      color: var(--text-muted);
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: revealIn 0.6s forwards;
+      animation-delay: var(--delay);
+    }
+    @keyframes revealIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .highlight-line {
+      background: rgba(var(--accent-glow), 0.2);
+      display: block;
+      width: 100%;
+    }
+  </style>
+
+  <div class="slide-header">
+    <h1 class="slide-title">Smart Contract Logic and Execution</h1>
+  </div>
+
+  <div class="slide-grid">
+    <div class="code-container reveal visible" style="--delay: 0.2s">
+      <pre class="language-solidity" tabindex="0"><code class="language-solidity">
+contract Vault {
+    // State management: Storage costs Gas
+    mapping(address =&gt; uint256) public balances;
+
+    function deposit() external payable {
+        // Deterministic logic: No random API calls
+        require(msg.value &gt; 0, "Must send ETH");
+        
+        // Gas optimization: Local cache of state
+        uint256 currentBal = balances[msg.sender];
+        balances[msg.sender] = currentBal + msg.value;
+    }
+
+    function withdraw(uint256 _amount) external {
+        // Security: Check-Effects-Interactions pattern
+        require(balances[msg.sender] &gt;= _amount, "Insufficient");
+        
+        balances[msg.sender] -= _amount;
+        payable(msg.sender).transfer(_amount);
+    }
+}
+      </code></pre>
+    </div>
+
+    <div class="content-area">
+      <ul class="content-list">
+        <li class="content-item reveal visible" style="--delay: 0.4s">
+          <span class="item-title">Deterministic Execution</span>
+          <span class="item-desc">Contracts must behave identically across all nodes. No external API calls; all data must be on-chain.</span>
+        </li>
+        <li class="content-item reveal visible" style="--delay: 0.6s">
+          <span class="item-title">Solidity &amp; Rust</span>
+          <span class="item-desc">Industry standards for trust: Solidity (EVM) and Rust (Solana/Polkadot) focus on memory safety and strict typing.</span>
+        </li>
+        <li class="content-item reveal visible" style="--delay: 0.8s">
+          <span class="item-title">Gas &amp; State Optimization</span>
+          <span class="item-desc">Every state change costs "Gas". Optimizing storage slots is critical for scalability and cost-reduction.</span>
+        </li>
+        <li class="content-item reveal visible" style="--delay: 1.0s">
+          <span class="item-title">Security Auditing</span>
+          <span class="item-desc">Preventing re-entrancy and integer overflows through formal verification and rigorous peer review.</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
