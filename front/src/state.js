@@ -5,6 +5,7 @@ export const state = {
   sessionId: null,
   outline: [],
   slides: [],
+  slideErrors: {},      // { slideId: errorMessage }
   draftSlides: {},        // id → draft HTML
   latestSlides: {},       // id → latest HTML
   promptApplyingSlides: {}, // id → true/false
@@ -24,6 +25,7 @@ export const state = {
   visionModel: 'ollama/ministral-3:14b-cloud',
   projectPath: '',
   uploadedAssets: [],
+  designConfig: {}, // { font_hints, color_palette, atmospheric_feel, etc. }
   isReorderMode: false, // UI toggle for drag-and-drop
 };
 

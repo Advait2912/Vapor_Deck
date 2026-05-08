@@ -75,7 +75,7 @@ async def change_mode(session_id: str, req: ChangeModeRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    if req.mode not in ("plan", "build"):
+    if req.mode not in ("plan", "build", "design"):
         raise HTTPException(status_code=400, detail="Invalid mode")
     
     session.mode = req.mode
@@ -272,6 +272,7 @@ async def generate_slide(session_id: str, slide_id: str, force: bool = False):
             layout_hint=slide_spec.layout_hint,
             theme=session.theme,
             deck_context=session.deck_context,
+            design_config=session.design_config,
             relevant_chunks=relevant,
             asset_filenames=asset_filenames,
         )
@@ -470,6 +471,7 @@ async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
         layout_hint=slide_spec.layout_hint,
         theme=session.theme,
         deck_context=session.deck_context,
+        design_config=session.design_config,
         relevant_chunks=relevant,
         asset_filenames=asset_filenames,
         is_refinement=True,

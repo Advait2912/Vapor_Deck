@@ -6,141 +6,139 @@ including scoped <style> and interactive <script> tags.
 """
 
 SLIDE_SYSTEM = (
-    "You are a senior frontend developer generating slides for a web-native presentation. "
-    "The slide is rendered in a FIXED 1280x720 pixel canvas. ALL content must fit within this viewport with NO scrolling — "
-    "every element must be visible without any scroll interaction. Be ruthless about content density: fewer, impactful points beat many verbose ones. "
-    "Return ONLY the <section> HTML element — nothing else. "
-    "No markdown fences. No explanations. No surrounding HTML boilerplate."
+    "You are a visionary presentation designer and expert frontend developer. "
+    "Your goal is to create web-native slides that look like high-end editorial magazines or premium tech landing pages. "
+    "You have full creative freedom to use modern web APIs (CSS masks, filters, gradients, mix-blend-mode, SVG, transitions). "
+    "Think in 'scenes' and 'visual narrative' rather than just slides and bullet points. "
+    "Return ONLY the <section> HTML element — no fences, no chatter."
 )
 
-SLIDE_PROMPT = """Generate one slide as a complete HTML <section class="slide"> element.
+SLIDE_PROMPT = """Generate one stunning, web-native presentation slide as a complete <section class="slide"> element.
 
-=== SLIDE SPEC ===
+=== THE SCENE ===
 Slide {n} of {total}
 Title: {title}
 Intent: {intent}
 Key points to cover:
 {key_points}
-Layout hint: {layout_hint}
+Visual Narrative Hint: {layout_hint}
 
-=== DECK CONTEXT (what has already been covered — do NOT repeat or contradict) ===
+=== DECK CONTEXT (ensure narrative flow) ===
 {deck_context_summary}
 
-=== RELEVANT REFERENCE CONTENT (draw from this if helpful) ===
+=== REFERENCE KNOWLEDGE ===
 {relevant_chunks}
 
 {asset_list}
 {brand_section}
-=== STYLE RULES ===
-Theme: {theme}
-NEVER set width/height in px on the .slide element — it must fill its container fluidly.
-All colours MUST be expressed through CSS custom properties — never use raw hex or rgb() on HTML elements directly.
-Available variables: --bg, --surface, --text, --text-muted, --accent, --accent-glow, --code-bg, --border, --font-head, --font-body
 
-If a BRAND ENFORCEMENT section appears above:
-  → You MUST add a `section.slide {{ }}` block at the VERY TOP of your <style> tag that redefines these variables with the brand palette.
-  → This is not optional. Every element that uses var(--accent), var(--bg) etc. will automatically inherit the brand colours.
-  → The section-scoped override takes priority over the global theme without breaking any other slide.
+=== DESIGN PRINCIPLES ===
+1. THE VIEWPORT: The canvas is 1280x720. While you should avoid global scrolling, feel free to use overflow: auto for specific blocks (like code or long lists) if it enhances the "pro-tool" feel.
+2. CREATIVE FREEDOM: Break the grid. Use asymmetrical layouts, overlapping elements, and bold typography. Avoid generic bullet-point lists; use callout cards, data-visualization metaphors, or interactive highlights instead.
+3. MOTION & DEPTH: Use `class="reveal"` with `--delay: Xs` for staggered entry animations. CRITICAL: All animations MUST complete within 2 seconds (ensure delay + duration <= 2s) so the visual audit can capture a stable state. Use depth effects (blur, shadows, gradients) to create a premium atmosphere.
+4. TYPOGRAPHY: Use `clamp()` for fluid text. Headlines should be bold and expressive; body text should be elegant and readable.
+5. CODE & DATA: Render code in `<pre><code class="language-{{lang}}">`. Use SVG or CSS-based charts to represent data visually where possible.
 
 === OUTPUT RULES ===
-1. Return ONLY the <section class="slide"> element — no wrapping HTML, no doctype
-2. The .slide element MUST use:
-     width: 100%; height: 100%;
-     min-height: 100vh;
-     box-sizing: border-box;
-   NO fixed pixel dimensions on the root slide element.
-3. All child layout must be responsive — use flexbox or grid with relative/percent/vh/vw units
-4. Font sizes: use clamp() or vw-based units (e.g. clamp(1rem, 2.5vw, 2.5rem)) so text scales with viewport
-5. Include a scoped <style> block inside the section for layout
-6. For interactive elements (tabs, toggles), include a <script> block
-7. Add class="reveal" and style="--delay: Xs" to animate elements in staggered sequence
-8. Code blocks: use <pre><code class="language-{{lang}}"> with Prism.js class names
-9. Images: only use CSS backgrounds or SVG — no external image URLs
-10. The slide heading MUST match the title exactly: "{title}"
+- Return ONLY the <section class="slide"> element.
+- Define a scoped `<style>` block at the top of the section.
+- If interactivity is needed, include a `<script>` block.
+- All colours MUST use CSS variables: --bg, --surface, --text, --text-muted, --accent, --accent-glow, --border.
 
-=== CANVAS CONSTRAINT (CRITICAL — READ CAREFULLY) ===
-The slide renders inside a FIXED 1280x720 pixel browser viewport. This is like a PowerPoint slide — there is NO scrollbar and NO overflow.
-RULES YOU MUST FOLLOW:
-- NEVER set overflow-y: auto, overflow-y: scroll, or overflow: auto on any content container. Content must never need to scroll.
-- NEVER use max-height with overflow on content boxes. Every element must be naturally visible.
-- LIMIT bullet points: maximum 4 per column. If you have more content, reduce it — do NOT list everything.
-- Keep body text SHORT: each bullet point should be one concise sentence, not a paragraph.
-- Font sizes: body text minimum 0.9rem, maximum 1.1rem. Do not go smaller trying to fit more content.
-- If you have two columns, each column should have at most 3-4 items.
-- Headings: clamp(1.5rem, 3vw, 2.5rem). Do not make them larger or they eat into content space.
-- Prefer visual hierarchy and white space over cramming in maximum text.
-- If the content spec has more points than can fit cleanly, SUMMARIZE and MERGE them — never sacrifice readability for completeness.
-
-=== INTENT GUIDANCE ===
+=== INTENT EXECUTION ===
 {intent_guidance}
 """
 
 INTENT_GUIDANCE = {
-    "title-hero": "Large centered title. Subtitle with 1-2 short sentences. Optional decorative element. NO bullet points.",
-    "explain-concept": "Clear heading. Maximum 2 short paragraphs or 3 callout boxes. Keep each text block to 1-2 sentences.",
-    "explain-mechanism": "Step-by-step flow with maximum 4 steps. Use a visual diagram in CSS if possible. Each step: label + one sentence.",
-    "show-example": "Heading + one concrete example. Code snippet if relevant. Maximum 3 annotations. No long explanations.",
-    "compare": "Two-column layout. Maximum 3 items per column. Each item: bold label + one short sentence.",
-    "list-points": "Heading + MAXIMUM 4 bullet points. Each bullet is ONE short sentence (under 15 words). Prioritize the most impactful points.",
-    "code-walkthrough": "Code block takes 60% of space. Maximum 3 annotation callouts. Keep annotations brief.",
-    "summary": "Heading 'Key Takeaways'. MAXIMUM 4 bullet points. One short sentence each. Optional closing statement.",
+    "title-hero": "Create a high-impact cinematic moment. Dramatic typography, large negative space, and a single unforgettable visual element.",
+    "explain-concept": "Educational but elegant. Use visual metaphors (callout cards, floating boxes) to break down the idea. Avoid more than 3 blocks of text.",
+    "explain-mechanism": "A visual flow or architectural overview. Use CSS borders/lines to connect steps. Stagger the reveal of the mechanism steps.",
+    "show-example": "Focus on the artifact. A large code block or a visual mockup. Add subtle annotations that 'point' to key features.",
+    "compare": "A high-contrast side-by-side view. Use different background intensities for the two sides to create a visual 'clash' or 'harmony'.",
+    "list-points": "Modern listing. Not bullets—think 'feature grid' or 'staggered cards'. Each point should feel like a distinct component.",
+    "code-walkthrough": "Developer-centric. Deep-focus code blocks with interactive callouts or highlighted lines. Use --code-bg for contrast.",
+    "summary": "Key Takeaways as a final punch. Use a simplified, high-clarity layout that reinforces the main message of the deck.",
+    "creative-visual": "PURE AESTHETICS. Use a bold, artistic layout with minimal text (max 1 sentence). Focus on a high-end visual metaphor or a stunning background effect.",
+    "narrative-break": "A dramatic pause in the presentation. Use a bold quote, a massive single word, or a simple question. High contrast, maximum impact.",
 }
 
 
-def _build_brand_section(style_intent: dict, theme: str = "dark-tech", topic: str = "", is_refinement: bool = False) -> str:
+def _build_brand_section(design_config: dict, theme: str = "dark-tech", topic: str = "", is_refinement: bool = False) -> str:
     """
     Build a BRAND ENFORCEMENT or THEMATIC STYLING prompt block.
     """
-    palette      = style_intent.get("extracted_palette", [])
-    fonts        = style_intent.get("extracted_fonts", [])
-    color_notes  = style_intent.get("color_notes", "")
-    layout_pref  = style_intent.get("layout_preference", "")
+    palette      = design_config.get("color_palette", [])
+    fonts        = design_config.get("font_hints", [])
+    tone         = design_config.get("tone", "")
+    layout_pref  = design_config.get("layout_preferences", "")
 
     is_dark_theme = any(t in theme.lower() for t in ["dark", "black", "night", "tech", "glass"])
 
+    # Extract rich design signals
+    palette = design_config.get("color_palette", [])
+    fonts = design_config.get("font_hints", [])
+    tone = design_config.get("tone", "")
+    layout_pref = design_config.get("layout_preferences", "")
+    atmospheric_feel = design_config.get("atmospheric_feel", "")
+    color_theory_intent = design_config.get("color_theory_intent", "")
+    component_styles = design_config.get("component_styles", "")
+    visual_elements = design_config.get("visual_elements", "")
+
     # Case A: Brand signals exist
-    if palette or color_notes:
+    if palette or tone or atmospheric_feel:
         status_text = "(GUIDELINE — maintain consistency)" if is_refinement else "(MANDATORY — apply to this slide)"
         lines = [
             "",
-            f"=== BRAND ENFORCEMENT {status_text} ===",
-            "A design reference image was provided. The visual identity below MUST be reflected.",
+            f"=== BRAND & DESIGN ENFORCEMENT {status_text} ===",
+            "A persistent design system is in effect. You must execute this specific aesthetic vision.",
             "",
         ]
+
+        if atmospheric_feel:
+            lines += [f"ATMOSPHERIC FEEL: {atmospheric_feel}", ""]
+
+        if tone:
+            lines += [f"DESIGN TONE: {tone}", ""]
+
         if palette:
             palette_str = ", ".join(palette[:6])
             lines += [
-                f"Extracted colour palette: {palette_str}",
+                f"COLOUR PALETTE: {palette_str}",
+                f"COLOUR THEORY INTENT: {color_theory_intent or 'Use these colors harmoniously.'}",
                 "",
-                "ACTION: At the VERY TOP of your <style> block, define/override these variables:",
+                "ACTION: At the VERY TOP of your <style> block, define these variables:",
                 "  section.slide {",
             ]
             
             if is_dark_theme:
                 lines += [
-                    "    /* Theme: DARK - ensure background is very dark for tech feel */",
-                    f"    --bg:          {palette[0] if palette[0].startswith('#0') or palette[0].startswith('#1') else '#0a0b1e'}; /* Use darkest brand color or deep tech-black */",
-                    f"    --surface:     {palette[0]}; /* Dark brand surface */",
-                    f"    --accent:      {palette[1] if len(palette)>1 else palette[0]}; /* Vibrant brand highlight */",
-                    f"    --text:        {palette[-1]}; /* Lightest brand colour */",
+                    "    /* Theme: DARK */",
+                    f"    --bg:          {palette[4] if len(palette)>4 else palette[0]}; /* Background */",
+                    f"    --surface:     {palette[5] if len(palette)>5 else palette[0]}; /* Surface/Card */",
+                    f"    --accent:      {palette[2] if len(palette)>2 else palette[0]}; /* Accent Highlight */",
+                    f"    --text:        {palette[0] if not palette[0].startswith('#0') and not palette[0].startswith('#1') else '#ffffff'}; /* Foreground */",
                 ]
             else:
                 lines += [
-                    "    --bg:          <darkest palette colour — slide background>;",
-                    "    --surface:     <second-darkest — panel / card backgrounds>;",
-                    "    --accent:      <most vibrant / saturated brand colour>;",
-                    "    --text:        <lightest colour readable as foreground text>;",
+                    f"    --bg:          {palette[4] if len(palette)>4 else '#ffffff'};",
+                    f"    --surface:     {palette[5] if len(palette)>5 else '#f9fafb'};",
+                    f"    --accent:      {palette[2] if len(palette)>2 else palette[0]};",
+                    f"    --text:        {palette[0]};",
                 ]
                 
             lines += [
-                "    --accent-glow: <rgba() version of accent at 0.3 opacity>;",
+                "    --accent-glow: <rgba() version of --accent at 0.3 opacity>;",
                 "    --text-muted:  <muted text, 60–70% opacity blend of --text>;",
-                "    --border:      <low-opacity palette colour>;",
+                "    --border:      <low-opacity border based on palette>;",
                 "  }",
             ]
-        if color_notes:
-            lines += [f"Colour intent from brand analysis: {color_notes}"]
-    
+
+        if component_styles:
+            lines += ["", f"COMPONENT DNA: {component_styles}"]
+
+        if visual_elements:
+            lines += ["", f"RECURRING MOTIFS: {visual_elements}"]
+
     # Case B: No brand signals — infer from topic
     else:
         lines = [
@@ -164,15 +162,15 @@ def _build_brand_section(style_intent: dict, theme: str = "dark-tech", topic: st
         lines += [
             "",
             "NOTE: Since this is a REFINEMENT, you may deviate from the specific palette mappings above",
-            "if the user's specific instruction requires a different mood (e.g., 'make it darker' or 'change the accent').",
+            "if the user's specific instruction requires a different mood.",
         ]
 
     if fonts:
         font_list = ", ".join(f"'{f}'" for f in fonts[:3])
-        lines += ["", f"Font guidance: prefer {font_list} where available."]
+        lines += ["", f"TYPOGRAPHY GUIDANCE: prefer {font_list} where available."]
 
     if layout_pref:
-        lines += ["", f"Layout directive: {layout_pref}"]
+        lines += ["", f"COMPOSITION & LAYOUT: {layout_pref}"]
 
     lines += ["", "=== END STYLING SECTION ===\n"]
     return "\n".join(lines)
@@ -187,6 +185,7 @@ def build_slide_prompt(
     layout_hint: str,
     theme: str,
     deck_context: dict,
+    design_config: dict,
     relevant_chunks: str = "",
     asset_filenames: list[str] | None = None,
     is_refinement: bool = False,
@@ -197,12 +196,11 @@ def build_slide_prompt(
     key_points_str = "\n".join(f"- {p}" for p in key_points)
     guidance     = INTENT_GUIDANCE.get(intent, "Follow the intent as described.")
 
-    # Extract brand signals from deck_context (look in 'synthesis' for Phase 1 output)
+    # Extract topic from deck_context
     synthesis = deck_context.get("synthesis", {})
-    style_intent = synthesis.get("style_intent", deck_context.get("style_intent", {}))
     topic = synthesis.get("topic", deck_context.get("topic", ""))
     
-    brand_section = _build_brand_section(style_intent, theme, topic, is_refinement)
+    brand_section = _build_brand_section(design_config, theme, topic, is_refinement)
 
     # Format the asset list section
     asset_section = _build_asset_section(asset_filenames)

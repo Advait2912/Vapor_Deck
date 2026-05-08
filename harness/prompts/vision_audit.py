@@ -69,7 +69,7 @@ Return ONLY this JSON (no extra text):
 VERDICT RULES:
 - "good": No significant issues. Slide is clean, professional, and fills the space elegantly.
 - "fixable": 1-3 minor issues (spacing, font size, alignment, wrapping) that can be fixed with targeted CSS tweaks.
-- "regenerate": Major structural failures: severe overflow, entire layout broken, content completely illegible, or more than 60%% of slide space is wasted.
+- "regenerate": Major structural failures: severe overflow, entire layout broken, content completely illegible, more than 60%% of slide space is wasted, or if the slide appears to have failed to load assets (e.g., text is in a generic fallback font when it should be styled, or images/icons are missing).
 
 CRITICAL: Be CONSERVATIVE about "regenerate" — only use it for truly broken layouts. Minor issues should be "fixable". A slide with two columns where one has slightly more content than the other is "good".
 """

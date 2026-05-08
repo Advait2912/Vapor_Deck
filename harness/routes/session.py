@@ -131,8 +131,6 @@ async def synthesize(session_id: str):
     session.deck_context = ctx
     session.topic = ctx.get("topic", "")
     session.hard_constraints = ctx.get("hard_constraints", [])
-    session.derived_color_palette = ctx.get("style_intent", {}).get("extracted_palette", [])
-    session.derived_font_hints = ctx.get("style_intent", {}).get("extracted_fonts", [])
     session.status = "synthesized"
     save_session(session)
 
@@ -144,7 +142,6 @@ async def synthesize(session_id: str):
             "tone": ctx.get("tone"),
             "key_themes": ctx.get("key_themes", []),
             "constraints": len(session.hard_constraints),
-            "style": ctx.get("style_intent", {}).get("suggested_theme"),
             "units_processed": len(session.input_units),
             "reference_tokens_used": ctx.get("reference_tokens_used", 0),
         },

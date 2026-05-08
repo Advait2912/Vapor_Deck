@@ -110,12 +110,14 @@ from routes.upload import router as upload_router
 from routes.slide import router as slide_router
 from routes.snapshot import router as snapshot_router
 from routes.assets import router as assets_router
+from routes.design import router as design_router
 
 app.include_router(session_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
 app.include_router(slide_router, prefix="/api")
 app.include_router(snapshot_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
+app.include_router(design_router, prefix="/api")
 
 # ── Static Files ──────────────────────────────────────────────────────────────
 from fastapi.staticfiles import StaticFiles

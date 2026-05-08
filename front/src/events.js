@@ -8,7 +8,7 @@ export function setupEventListeners(actions) {
   const { 
     onStartGeneration, 
     onRefineImagesSelected,
-    onDesignRefSelected,
+    onDesignChat,
     onExport, 
     onConfirmOutline, 
     onApproveSlide, 
@@ -77,13 +77,21 @@ export function setupEventListeners(actions) {
     });
   }
 
-  // Design Reference upload — button opens hidden file input; change fires callback
-  if (elements.designRefBtn && elements.designRefInput) {
-    elements.designRefBtn.addEventListener('click', () => {
-      elements.designRefInput.click();
+  // Design Mode Chat
+  if (elements.designGenerateBtn) {
+    elements.designGenerateBtn.addEventListener('click', () => {
+      const msg = elements.designPromptInput.value.trim();
+      if (msg) onDesignChat(msg);
     });
-    elements.designRefInput.addEventListener('change', (e) => {
-      onDesignRefSelected?.(Array.from(e.target.files || []));
+  }
+
+  if (elements.designPromptInput) {
+    elements.designPromptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const msg = elements.designPromptInput.value.trim();
+        if (msg) onDesignChat(msg);
+      }
     });
   }
 
@@ -110,7 +118,7 @@ export function setupEventListeners(actions) {
   });
 
   // Auto-resize both textareas as user types
-  [elements.promptInput, elements.refineInstructionInput].forEach(ta => {
+  [elements.promptInput, elements.refineInstructionInput, elements.designPromptInput].forEach(ta => {
     if (!ta) return;
     ta.addEventListener('input', () => {
       ta.style.height = 'auto';
@@ -123,7 +131,9 @@ export function setupEventListeners(actions) {
     // Ctrl + P for Mode Toggle
     if (e.ctrlKey && e.key.toLowerCase() === 'p') {
       e.preventDefault(); // Prevent print dialog
-      const newMode = state.mode === 'plan' ? 'build' : 'plan';
+      let newMode = 'plan';
+      if (state.mode === 'plan') newMode = 'design';
+      else if (state.mode === 'design') newMode = 'build';
       onSwitchMode(newMode);
     }
   });

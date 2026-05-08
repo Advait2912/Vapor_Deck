@@ -39,6 +39,7 @@ import {
   takeSnapshot,
   addOutlineSlide,
   retryAnalysis,
+  sendDesignChat,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -47,10 +48,9 @@ import { initResizers } from './resizers.js';
 import { setupEventListeners } from './events.js';
 
 // ── New modules ────────────────────────────────────────────────────────────────
-import { mountSlide, mountPlaceholder } from './renderer/index.js';
+import { mountSlide, mountPlaceholder, buildBaseDocument, ensureFontsInDocument } from './renderer/index.js';
 import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
 import { renderGlobalControls, globalState, addSlideToOutline, reorderSlides } from './ui/global_control.js';
-import { buildBaseDocument } from './renderer/iframe.js';
 import {
   comparisonState,
   enterComparison,
@@ -62,7 +62,6 @@ import {
 } from './ui/comparison.js';
 
 let pendingRefineImages = [];
-let pendingDesignRefImages = [];
 let lastRefinedHtml = '';
 const activeSlideControllers = new Map();
 let activeRefineController = null;
@@ -300,11 +299,13 @@ Please integrate this into the outline at the most logical position. Return the 
   window.addEventListener('global:generate-all', () => {
     if (!state.sessionId || !state.outline.length) return;
     if (state.status === 'REVIEWING_OUTLINE') return;
+    
+    // Add all unbuilt slides to the queue
     state.outline.forEach((item, idx) => {
       const id = item.id;
       const isBuilt = !!state.latestSlides[id] || state.slides.some(s => s.id === id);
       if (!isBuilt && !state.generatingSlides[id]) {
-        startSlideGeneration(idx, false);
+        addToGenerationQueue(idx, false);
       }
     });
   });
@@ -354,7 +355,7 @@ async function init() {
   setupEventListeners({
     onStartGeneration: startGeneration,
     onRefineImagesSelected: handleRefineImagesSelected,
-    onDesignRefSelected: handleDesignRefSelected,
+    onDesignChat: handleDesignChat,
     onExport: handleExport,
     onConfirmOutline: handleConfirmOutline,
     onRefine: startRefinement,
@@ -366,10 +367,11 @@ async function init() {
       const html = useRefinedVersion();
       if (!html?.trim()) return;
       state.currentSlideHtml = html;
-      state.draftSlides[state.currentIndex] = html;
+      const id = getSlideId(state.currentIndex);
+      if (id) state.draftSlides[id] = html;
       // Use new isolated renderer
       const iframe = elements.slideIframe;
-      mountSlide(iframe, html, state.theme);
+      mountSlide(iframe, html, state.theme, state.designConfig?.font_hints);
       persistSessionViewState();
     },
     onSwitchMode: handleSwitchMode,
@@ -412,8 +414,9 @@ function _wireComparisonButtons() {
     const html = useRefinedVersion();
     if (html?.trim()) {
       state.currentSlideHtml = html;
-      state.draftSlides[state.currentIndex] = html;
-      mountSlide(elements.slideIframe, html, state.theme);
+      const id = getSlideId(state.currentIndex);
+      if (id) state.draftSlides[id] = html;
+      mountSlide(elements.slideIframe, html, state.theme, state.designConfig?.font_hints);
       persistSessionViewState();
     }
     resetComparison();
@@ -513,6 +516,7 @@ async function loadProjectInfo() {
         currentIndex: cached.currentIndex ?? (session.current_index || 0),
         currentSlideHtml: cached.currentSlideHtml || '',
         theme: session.theme || 'dark-tech',
+        designConfig: session.design_config || {},
         model: session.text_model || state.model,
         visionModel: session.vision_model || state.visionModel,
         mode: session.mode || 'plan',
@@ -539,17 +543,18 @@ async function loadProjectInfo() {
         state.phase = 'DESIGN';
         const approved = state.slides.find(s => s.index === state.currentIndex);
         if (approved) {
-          mountSlide(elements.slideIframe, approved.html, state.theme);
+          mountSlide(elements.slideIframe, approved.html, state.theme, state.designConfig?.font_hints);
         } else {
           mountPlaceholder(elements.slideIframe, 'Resuming previous generation...');
         }
         resumeGeneratingSlidesFromCache();
       } else if (s === 'REVIEWING' || s === 'DONE') {
         state.phase = 'DESIGN';
-        const latest = state.latestSlides[state.currentIndex];
+        const id = getSlideId(state.currentIndex);
+        const latest = id ? state.latestSlides[id] : null;
         if (latest) {
           state.currentSlideHtml = latest;
-          mountSlide(elements.slideIframe, latest, state.theme);
+          mountSlide(elements.slideIframe, latest, state.theme, state.designConfig?.font_hints);
         } else {
           mountPlaceholder(elements.slideIframe, s === 'DONE' ? 'Deck complete! Export or start a new deck.' : 'Ready to review.');
         }
@@ -570,7 +575,6 @@ async function handleNewDeck() {
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingRefineImages = [];
-  pendingDesignRefImages = [];
   updateState({
     sessionId: null, outline: [], slides: [], messages: [],
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
@@ -608,13 +612,6 @@ async function startGeneration(prompt) {
     updateUI();
     await uploadText(state.sessionId, prompt, 'topic');
     
-    // Upload any pending design references queued before the session existed
-    for (const image of pendingDesignRefImages) {
-      const result = await uploadFile(state.sessionId, image, 'design_style');
-      _renderDesignRefSignal([image], result);
-    }
-    pendingDesignRefImages = [];
-
     elements.generateBtn.textContent = 'Synthesizing...';
     await synthesize(state.sessionId);
 
@@ -699,8 +696,9 @@ async function handleSwitchMode(newMode) {
 // ── Plan Chat ───────────────────────────────────────────────────────────────────
 async function handlePlanChat(message) {
   if (!state.sessionId) return;
-  if (state.generatingSlides[state.currentIndex]) {
-    renderChatMessage('ai', `Can't chat while slide ${state.currentIndex + 1} is generating.`);
+  const id = getSlideId(state.currentIndex);
+  if (id && state.generatingSlides[id]) {
+    alert('Slide is still generating. Please wait.');
     return;
   }
   try {
@@ -734,6 +732,35 @@ async function handlePlanChat(message) {
   }
 }
 
+// ── Design Chat ─────────────────────────────────────────────────────────────────
+async function handleDesignChat(message) {
+  if (!state.sessionId) return;
+  try {
+    renderChatMessage('user', message, elements.designChatHistory);
+    
+    elements.designPromptInput.value = '';
+    elements.designPromptInput.style.height = 'auto';
+    elements.designPromptInput.disabled = true;
+    elements.designGenerateBtn.disabled = true;
+
+    if (currentAbortController) currentAbortController.abort();
+    currentAbortController = new AbortController();
+    const res = await sendDesignChat(state.sessionId, message, currentAbortController.signal);
+    currentAbortController = null;
+
+    const aiResponse = res.message || "Design configuration updated.";
+    renderChatMessage('ai', aiResponse, elements.designChatHistory);
+
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    console.error('Design chat failed:', error);
+  } finally {
+    elements.designPromptInput.disabled = false;
+    elements.designGenerateBtn.disabled = false;
+    elements.designPromptInput.focus();
+  }
+}
+
 // ── Outline Navigation ───────────────────────────────────────────────────────────
 function navigateToSlide(index) {
   state.currentIndex = index;
@@ -759,7 +786,7 @@ function navigateToSlide(index) {
   if (latest) {
     state.currentSlideHtml = latest;
     state.status = 'REVIEWING';
-    mountSlide(elements.slideIframe, latest, state.theme);
+    mountSlide(elements.slideIframe, latest, state.theme, state.designConfig?.font_hints);
     renderOutline(navigateToSlide);
     updateUI();
     persistSessionViewState();
@@ -770,7 +797,7 @@ function navigateToSlide(index) {
   if (draft) {
     state.currentSlideHtml = draft;
     state.status = 'REVIEWING';
-    mountSlide(elements.slideIframe, draft, state.theme);
+    mountSlide(elements.slideIframe, draft, state.theme, state.designConfig?.font_hints);
     renderOutline(navigateToSlide);
     updateUI();
     persistSessionViewState();
@@ -781,14 +808,14 @@ function navigateToSlide(index) {
   if (saved) {
     state.currentSlideHtml = saved.html;
     state.status = 'REVIEWING';
-    mountSlide(elements.slideIframe, saved.html, state.theme);
+    mountSlide(elements.slideIframe, saved.html, state.theme, state.designConfig?.font_hints);
     renderOutline(navigateToSlide);
     updateUI();
     persistSessionViewState();
     return;
   }
 
-  if (state.generatingSlides[index]) {
+  if (id && state.generatingSlides[id]) {
     mountPlaceholder(elements.slideIframe, `Slide ${index + 1} is generating...`);
     renderOutline(navigateToSlide);
     updateUI();
@@ -806,7 +833,10 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     console.warn('Cannot generate while plan chat in progress');
     return;
   }
-  if (state.generatingSlides[index] && !force) return;
+  
+  const id = getSlideId(index);
+  // If we are calling this directly (not via queue), and it's already generating, abort
+  if (id && state.generatingSlides[id] === true && !force) return;
   if (force && activeSlideControllers.has(index)) {
     activeSlideControllers.get(index).abort();
   }
@@ -818,8 +848,6 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     updateMode(state.sessionId, 'build').catch(() => {});
   }
   
-  const id = getSlideId(index);
-
   state.status = 'GENERATING';
   if (id) {
     state.generatingSlides[id] = true;
@@ -866,7 +894,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       state.currentSlideHtml = slideHtml;
       state.status = 'REVIEWING';
       // Render final clean version
-      mountSlide(elements.slideIframe, slideHtml, state.theme);
+      mountSlide(elements.slideIframe, slideHtml, state.theme, state.designConfig?.font_hints);
     }
 
     updateUI();
@@ -876,8 +904,15 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     // ── Vision audit (Goal 3) — runs after slide is shown, non-blocking ────
     _runVisionAuditInBackground(index, slideNum, slideHtml);
 
+    if (id) delete state.generatingSlides[id];
+    return slideHtml;
+
   } catch (error) {
-    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    if (id) {
+      state.generatingSlides[id] = 'ERROR';
+      state.slideErrors[id] = error.message;
+    }
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) throw error;
     if (error?.name === 'AbortError') {
       if (index === state.currentIndex) {
         mountPlaceholder(elements.slideIframe, `Stopped generating slide ${slideNum}.`);
@@ -996,19 +1031,20 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
  * or concurrent slide generation.
  */
 async function captureHtmlOffscreen(html, theme = 'dark-tech') {
-  const themeLink  = `<link rel="stylesheet" href="/themes/${theme}.css">`;
-  const prismLink  = `<link rel="stylesheet" href="/lib/prism/prism-tomorrow.css">`;
-  const prismScript = `<script src="/lib/prism/prism.js"><\/script>`;
+  // 1. Scan HTML for any font-family declarations to ensure they are loaded
+  const fontMatches = html.match(/font-family:\s*['"]?([^'";,)]+)['"]?/g) || [];
+  const scannedFonts = fontMatches.map(m => {
+    return m.replace(/font-family:\s*['"]?/, '').replace(/['"]?$/, '').trim();
+  }).filter(f => f && !['serif', 'sans-serif', 'monospace', 'inherit', 'initial'].includes(f.toLowerCase()));
 
-  const fullHtml = `<!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    ${themeLink}${prismLink}
-    <style>
-      *, *::before, *::after { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; width: 1280px; height: 720px; overflow: hidden; background: #000; }
-      .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-    </style>
-  </head><body>${html}${prismScript}</body></html>`;
+  const designFonts = state.designConfig?.font_hints || [];
+  const allFonts = [...new Set([...designFonts, ...scannedFonts])];
+
+  // Prime the parent document's cache with these fonts so html2canvas can find them
+  ensureFontsInDocument(document, allFonts);
+
+  // Use the same robust document builder as the live preview
+  const fullHtml = buildBaseDocument(html, theme, allFonts);
 
   const offscreen = document.createElement('iframe');
   offscreen.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1280px;height:720px;border:none;pointer-events:none;visibility:hidden;';
@@ -1020,8 +1056,57 @@ async function captureHtmlOffscreen(html, theme = 'dark-tech') {
     offscreen.contentDocument.write(fullHtml);
     offscreen.contentDocument.close();
 
-    // Wait for layout + synchronous scripts (Prism highlight etc.) to finish
-    await new Promise(r => setTimeout(r, 800));
+    // 1. Wait for __VAPOR_READY__ signal (Prism + Initial Layout)
+    let attempts = 0;
+    while ((!offscreen.contentWindow || !offscreen.contentWindow.__VAPOR_READY__) && attempts < 50) {
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+
+    // 2. Ensure all stylesheets are loaded
+    const links = Array.from(offscreen.contentDocument.querySelectorAll('link[rel="stylesheet"]'));
+    await Promise.all(links.map(link => {
+      if (link.sheet) return Promise.resolve();
+      return new Promise(r => {
+        link.onload = link.onerror = r;
+      });
+    }));
+
+    // 3. Ensure all fonts are ready
+    if (offscreen.contentWindow.document.fonts) {
+      try {
+        await offscreen.contentWindow.document.fonts.ready;
+      } catch (e) {
+        console.warn('Font loading wait failed:', e);
+      }
+    }
+
+    // 4. Ensure all images are loaded
+    const images = Array.from(offscreen.contentDocument.images);
+    await Promise.all(images.map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(r => {
+        img.onload = img.onerror = r;
+      });
+    }));
+
+    // 5. Force audit mode for the capture
+    offscreen.contentDocument.body.classList.add('audit-mode');
+
+    // 6. Text Guard: Ensure the document actually has text before capturing
+    // This prevents capturing a 'blank' slide if the DOM hasn't fully hydrated.
+    let textWaitAttempts = 0;
+    while (offscreen.contentDocument.body.innerText.trim().length < 10 && textWaitAttempts < 10) {
+      await new Promise(r => setTimeout(r, 200));
+      textWaitAttempts++;
+    }
+
+    // 7. Force Layout Reflow & Paint
+    offscreen.contentDocument.body.getBoundingClientRect(); // Trigger reflow
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // Wait for double-paint
+
+    // 8. Stability buffer for layout engine and animations to fully settle
+    await new Promise(r => setTimeout(r, 3000));
 
     const canvas = await html2canvas(offscreen.contentDocument.body, {
       scale: 1,
@@ -1029,14 +1114,51 @@ async function captureHtmlOffscreen(html, theme = 'dark-tech') {
       height: 720,
       windowWidth: 1280,
       windowHeight: 720,
+      scrollX: 0,
+      scrollY: 0,
       logging: false,
       useCORS: true,
       backgroundColor: '#000000',
       onclone: (clonedDoc) => {
-        clonedDoc.body.style.cssText = 'width:1280px;height:720px;overflow:hidden;margin:0;padding:0;';
-        clonedDoc.querySelectorAll('.reveal').forEach(el => {
-          el.style.opacity = '1';
-          el.style.transform = 'none';
+        const body = clonedDoc.body;
+        body.style.cssText = 'width:1280px;height:720px;overflow:hidden;margin:0;padding:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;';
+        
+        // Use the cloned document's window for style computation
+        const win = clonedDoc.defaultView || window;
+
+        clonedDoc.querySelectorAll('*').forEach(el => {
+          const style = win.getComputedStyle(el);
+          
+          // 1. Visibility Recovery: Force elements that are COMPLETELY hidden to be visible.
+          // This catches AI-driven animations that start at opacity: 0 but haven't finished.
+          // We leave low-opacity elements (like 0.15 for background stars) alone to avoid over-exposure.
+          if (style.opacity === '0') {
+            el.style.setProperty('opacity', '1', 'important');
+            el.style.setProperty('visibility', 'visible', 'important');
+            el.style.setProperty('transform', 'none', 'important');
+          }
+
+          // 2. Fix Gradient Text (background-clip: text)
+          if (style.webkitBackgroundClip === 'text' || style.backgroundClip === 'text') {
+            // Try to extract the first color from the gradient to use as a flat fallback
+            const colorMatch = style.background.match(/#(?:[0-9a-fA-F]{3}){1,2}|rgba?\([^\)]+\)/);
+            const fallbackColor = colorMatch ? colorMatch[0] : 'var(--accent)';
+
+            el.style.setProperty('background', 'none', 'important');
+            el.style.setProperty('-webkit-background-clip', 'initial', 'important');
+            el.style.setProperty('background-clip', 'initial', 'important');
+            
+            if (style.color === 'transparent' || style.color === 'rgba(0, 0, 0, 0)') {
+              el.style.setProperty('color', fallbackColor, 'important');
+            }
+          }
+
+          // 3. Fix Over-exposure (Shadows)
+          if (el.style) {
+            el.style.textShadow = 'none';
+            el.style.boxShadow = 'none';
+            el.style.webkitTextStroke = '0px';
+          }
         });
       },
     });
@@ -1251,138 +1373,6 @@ function handleRefineImagesSelected(files) {
   renderImageThumbs(files, elements.refineImageThumbs);
 }
 
-/**
- * Design Reference Upload handler.
- * Shows thumbnails immediately. If a session already exists, uploads at once
- * and renders the extracted style signals. Otherwise queues the files so
- * startGeneration() picks them up after the session is created.
- */
-async function handleDesignRefSelected(files) {
-  if (!files.length) return;
-
-  // Always show thumbs immediately for instant feedback
-  renderImageThumbs(files, elements.designRefThumbs);
-  elements.designRefPanel.style.display = 'flex';
-
-  if (!state.sessionId) {
-    // No session yet — queue the files; startGeneration uploads them
-    pendingDesignRefImages = files;
-    _renderDesignRefSignal(files, null); // preview mode
-    return;
-  }
-
-  // Session exists — upload immediately
-  pendingDesignRefImages = [];
-  let lastResult = null;
-  for (const file of files) {
-    try {
-      lastResult = await uploadFile(state.sessionId, file, 'design_style');
-    } catch (err) {
-      console.warn('Design ref upload failed:', err);
-    }
-  }
-  _renderDesignRefSignal(files, lastResult);
-}
-
-/**
- * Render the signal confirmation card below the thumbs strip.
- * @param {File[]} files      - the uploaded files
- * @param {object|null} result - the backend upload response (or null = queued/preview)
-/**
- * Render the signal confirmation card below the thumbs strip.
- * @param {File[]} files      - the uploaded files
- * @param {object|null} result - the backend upload response (or null = queued/preview)
- *
- * NOTE: we never use inline onclick here — unit_id is stored in data-unit-id
- * and wired with addEventListener to avoid injection risks.
- */
-function _renderDesignRefSignal(files, result) {
-  const signal = elements.designRefSignal;
-  if (!signal) return;
-
-  if (!result) {
-    // Queued before session exists
-    signal.innerHTML = `
-      <div class="design-ref-badge" style="color:var(--accent);">🎨 ${files.length} Reference${files.length > 1 ? 's' : ''} Queued</div>
-      <div style="font-size: 0.7rem; opacity: 0.8;">Style signals will be extracted upon topic submission.</div>
-    `;
-    return;
-  }
-
-  const ds = result.design_signals;
-  const isFailed = ds?.visual_summary?.toLowerCase().includes('failed');
-  const unitId = result.unit_id || '';
-
-  if (!ds || isFailed) {
-    signal.innerHTML = `
-      <div class="design-ref-badge" style="background:rgba(255,100,100,0.1); color:#ff6b6b;">⚠️ Vision Analysis Failed</div>
-      <div style="font-size: 0.7rem; opacity: 0.8; margin-bottom: 8px;">The visual style could not be extracted automatically.</div>
-      <button class="retry-analysis-btn" data-unit-id="">
-        <span>🔄 Retry Analysis</span>
-      </button>
-    `;
-    // Wire retry button safely — no inline onclick, no global function call
-    const retryBtn = signal.querySelector('.retry-analysis-btn');
-    if (retryBtn) {
-      retryBtn.dataset.unitId = unitId;
-      retryBtn.addEventListener('click', () => handleRetryDesignAnalysis(retryBtn.dataset.unitId));
-    }
-    return;
-  }
-
-  // Render palette swatches + summary
-  const palette = (ds.color_palette || []).slice(0, 6);
-  const swatches = palette.map(hex =>
-    `<div class="swatch" title="${hex}" style="background:${hex};"></div>`
-  ).join('');
-
-  const fonts = (ds.font_hints || []).join(', ') || '—';
-  const summary = ds.visual_summary || '';
-
-  signal.innerHTML = `
-    <div class="design-ref-badge" style="background:rgba(100,255,150,0.1); color:#2ecc71;">✅ Design Reference Analyzed</div>
-    ${summary ? `<div style="color:var(--text-main); font-size:0.75rem; font-weight: 500;">${summary}</div>` : ''}
-    <div style="display:flex; flex-direction:column; gap:4px;">
-      ${palette.length ? `<div class="swatch-grid">${swatches}</div>` : ''}
-      ${fonts !== '—' ? `<div style="font-size:0.65rem; opacity:0.7;">Fonts: ${fonts}</div>` : ''}
-      <div style="margin-top: 4px;">
-        <button class="retry-analysis-btn" data-unit-id=""
-          style="background:transparent; border:none; padding:0; font-size:0.6rem; color:var(--text-muted); cursor:pointer; text-decoration:underline;">
-          Re-analyze
-        </button>
-      </div>
-    </div>
-  `;
-  // Wire re-analyze button safely
-  const reanalyzeBtn = signal.querySelector('.retry-analysis-btn');
-  if (reanalyzeBtn) {
-    reanalyzeBtn.dataset.unitId = unitId;
-    reanalyzeBtn.addEventListener('click', () => handleRetryDesignAnalysis(reanalyzeBtn.dataset.unitId));
-  }
-}
-
-async function handleRetryDesignAnalysis(unitId) {
-  if (!state.sessionId || !unitId) return;
-  
-  const signal = elements.designRefSignal;
-  const originalHtml = signal.innerHTML;
-  
-  try {
-    signal.innerHTML = `<div class="design-ref-badge" style="color:var(--accent);">⌛ Re-analyzing...</div>`;
-    const result = await retryAnalysis(state.sessionId, unitId);
-    // Pass [] for files — we don't have the original File objects after the fact,
-    // but the renderer handles that gracefully.
-    _renderDesignRefSignal([], { ...result, unit_id: unitId });
-  } catch (err) {
-    console.error('Retry analysis failed:', err);
-    signal.innerHTML = originalHtml;
-    // Re-wire the buttons that were just restored
-    const btn = signal.querySelector('.retry-analysis-btn');
-    if (btn && btn.dataset.unitId) {
-      btn.addEventListener('click', () => handleRetryDesignAnalysis(btn.dataset.unitId));
-    }
-  }
-}
 
 function regenerateCurrentSlide() {
   startSlideGeneration(state.currentIndex, true);
@@ -1390,7 +1380,8 @@ function regenerateCurrentSlide() {
 
 async function customRegenerateWithPrompt() {
   const instruction = elements.refineInstructionInput?.value?.trim();
-  const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+  const id = getSlideId(state.currentIndex);
+  const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
   if (!currentHtml?.trim() || !instruction) return;
 
   if (activeSlideControllers.has(state.currentIndex)) {
@@ -1406,8 +1397,6 @@ async function customRegenerateWithPrompt() {
   // Clear refine input immediately for instant feedback
   elements.refineInstructionInput.value = '';
   elements.refineInstructionInput.style.height = 'auto';
-
-  const id = getSlideId(index);
 
   state.slides = state.slides.filter(s => id ? s.id !== id : s.index !== index);
   state.status = 'GENERATING';
@@ -1447,7 +1436,7 @@ async function customRegenerateWithPrompt() {
       hideLoadingBar();
       state.currentSlideHtml = regenerated;
       state.status = 'REVIEWING';
-      mountSlide(elements.slideIframe, regenerated, state.theme);
+      mountSlide(elements.slideIframe, regenerated, state.theme, state.designConfig?.font_hints);
     }
     
     // Auto-finalize and persist the refinement
@@ -1556,7 +1545,7 @@ function initSlideshow() {
     state.outline.forEach((_, i) => {
       const dot = document.createElement('div');
       const id = getSlideId(i);
-      const isBuilt = id ? !!state.latestSlides[id] : !!state.latestSlides[i];
+      const isBuilt = id ? !!state.latestSlides[id] : false;
       dot.style.cssText = `width:7px;height:7px;border-radius:50%;cursor:pointer;transition:all 0.15s;background:${
         i === currentIdx ? '#fff' : isBuilt ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)'
       };transform:${i === currentIdx ? 'scale(1.3)' : 'scale(1)'};`;
@@ -1565,31 +1554,43 @@ function initSlideshow() {
     });
   }
 
+  function updateScale() {
+    if (overlay.style.display === 'none') return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const scale = Math.min(vw / 1280, vh / 720) * 0.95; // 0.95 for a slight margin
+    const frame = document.getElementById('slideshow-frame');
+    if (frame) {
+      frame.style.transform = `scale(${scale})`;
+    }
+  }
+
   function goTo(idx) {
     const total = state.outline.length;
     if (!total) return;
     currentIdx = (idx + total) % total;
     const id = getSlideId(currentIdx);
-    const rawHtml = id ? state.latestSlides[id] : state.latestSlides[currentIdx];
+    const rawHtml = id ? state.latestSlides[id] : null;
+    const fonts = state.designConfig?.font_hints || [];
     if (rawHtml) {
-      // Use the same renderer as the main preview so theme CSS loads correctly
-      iframe.srcdoc = buildBaseDocument(rawHtml, state.theme || 'dark-tech');
+      iframe.srcdoc = buildBaseDocument(rawHtml, state.theme || 'dark-tech', fonts);
     } else {
       iframe.srcdoc = PLACEHOLDER_HTML(state.outline[currentIdx]?.title);
     }
     counter.textContent = `${currentIdx + 1} / ${total}`;
     renderDots();
+    updateScale();
   }
 
   function open() {
     if (!state.outline.length) return;
-    // Start at the slide the user is currently viewing
     currentIdx = state.currentIndex || 0;
     overlay.style.display = 'flex';
     goTo(currentIdx);
+    window.addEventListener('resize', updateScale);
 
     keyHandler = (e) => {
-      if (e.key === 'Escape')      close();
+      if (e.key === 'Escape') close();
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(currentIdx + 1);
       if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   goTo(currentIdx - 1);
     };
@@ -1599,6 +1600,7 @@ function initSlideshow() {
   function close() {
     overlay.style.display = 'none';
     iframe.srcdoc = '';
+    window.removeEventListener('resize', updateScale);
     if (keyHandler) window.removeEventListener('keydown', keyHandler);
     keyHandler = null;
   }
@@ -1618,6 +1620,45 @@ function initSlideshow() {
       if (overlay.style.display === 'none') open();
     }
   });
+}
+
+// ── Generation Queue ──────────────────────────────────────────────────────────
+let generationQueue = [];
+let activeGenerations = 0;
+const MAX_CONCURRENT_GENERATIONS = 2;
+
+async function processGenerationQueue() {
+  if (activeGenerations >= MAX_CONCURRENT_GENERATIONS || generationQueue.length === 0) return;
+
+  const { index, force } = generationQueue.shift();
+  activeGenerations++;
+  
+  try {
+    await startSlideGeneration(index, force);
+  } catch (err) {
+    console.error(`Generation failed for slide ${index + 1}:`, err);
+  } finally {
+    activeGenerations--;
+    processGenerationQueue(); // Try to start the next one
+  }
+}
+
+function addToGenerationQueue(index, force = false) {
+  const id = getSlideId(index);
+  if (!id) return;
+  
+  // Don't queue if already generating or built (unless forced)
+  const isBuilt = !!state.latestSlides[id] || state.slides.some(s => s.id === id);
+  if (isBuilt && !force) return;
+  if (state.generatingSlides[id]) return;
+
+  state.generatingSlides[id] = 'QUEUED';
+  generationQueue.push({ index, force });
+  
+  updateUI();
+  refreshOutline();
+  
+  processGenerationQueue();
 }
 
 init();

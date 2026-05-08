@@ -93,6 +93,16 @@ export async function sendPlanChat(sessionId, message, currentSlideIndex, signal
   return response.json();
 }
 
+export async function sendDesignChat(sessionId, message, signal) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/chat/design`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+    signal
+  });
+  return response.json();
+}
+
 /**
  * Stream slide generation or refinement as an async generator.
  */

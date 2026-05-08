@@ -9,6 +9,9 @@ def get_project_dir() -> Path:
 def get_session_path() -> Path:
     return get_project_dir() / "vapor_deck.json"
 
+def get_design_path() -> Path:
+    return get_project_dir() / "design.json"
+
 import threading
 
 # In-memory cache
@@ -35,6 +38,14 @@ def get_session(session_id: str) -> DeckSession:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if data.get("session_id") == session_id:
+            # Load design config
+            design_path = get_design_path()
+            if design_path.exists():
+                try:
+                    with open(design_path, "r", encoding="utf-8") as df:
+                        data["design_config"] = json.load(df)
+                except (json.JSONDecodeError, OSError):
+                    pass
             session = DeckSession(**data)
             sessions[session_id] = session
             return session
@@ -53,6 +64,12 @@ def save_session(session: DeckSession) -> None:
         path = get_session_path()
         with open(path, "w", encoding="utf-8") as f:
             f.write(_serialize(session))
+            
+        # Write design_config to design.json
+        if session.design_config:
+            design_path = get_design_path()
+            with open(design_path, "w", encoding="utf-8") as df:
+                json.dump(session.design_config, df, indent=2)
 
 def delete_session(session_id: str) -> None:
     sessions.pop(session_id, None)

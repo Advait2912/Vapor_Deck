@@ -43,12 +43,12 @@ export const elements = {
   // Mode pill buttons
   modePillPlan: document.getElementById('interaction-mode-plan'),
   modePillBuild: document.getElementById('interaction-mode-build'),
-  // Design Reference upload (Phase 1)
-  designRefInput: document.getElementById('design-ref-input'),
-  designRefBtn: document.getElementById('design-ref-btn'),
-  designRefPanel: document.getElementById('design-ref-panel'),
-  designRefThumbs: document.getElementById('design-ref-thumbs'),
-  designRefSignal: document.getElementById('design-ref-signal'),
+  modePillDesign: document.getElementById('interaction-mode-design'),
+  // Design Mode Chat
+  designInteraction: document.getElementById('design-interaction'),
+  designChatHistory: document.getElementById('design-chat-history'),
+  designPromptInput: document.getElementById('design-prompt-input'),
+  designGenerateBtn: document.getElementById('design-generate-btn'),
 };
 
 /**
@@ -78,14 +78,18 @@ export function updateUI() {
 
   // ── Mode-based visibility ──────────────────────────────────────────────────
   const isPlan = state.mode === 'plan';
+  const isDesign = state.mode === 'design';
+  const isBuild = state.mode === 'build';
 
-  elements.planInteraction.style.display = isPlan ? 'flex' : 'none';
-  elements.buildInteraction.style.display = isPlan ? 'none' : 'flex';
+  if (elements.planInteraction) elements.planInteraction.style.display = isPlan ? 'flex' : 'none';
+  if (elements.designInteraction) elements.designInteraction.style.display = isDesign ? 'flex' : 'none';
+  if (elements.buildInteraction) elements.buildInteraction.style.display = isBuild ? 'flex' : 'none';
 
   // Update mode pill active state
-  if (elements.modePillPlan && elements.modePillBuild) {
+  if (elements.modePillPlan && elements.modePillBuild && elements.modePillDesign) {
     elements.modePillPlan.classList.toggle('active', isPlan);
-    elements.modePillBuild.classList.toggle('active', !isPlan);
+    elements.modePillDesign.classList.toggle('active', isDesign);
+    elements.modePillBuild.classList.toggle('active', isBuild);
   }
 
   // Status-based visibility
@@ -198,8 +202,8 @@ function refreshVisionIndicator() {
 /**
  * Render a chat message in the plan interaction history
  */
-export function renderChatMessage(role, text) {
-  if (!elements.chatHistory) return;
+export function renderChatMessage(role, text, target = elements.chatHistory) {
+  if (!target) return;
   
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message ${role === 'user' ? 'user-msg' : 'ai-msg'} fade-in`;
@@ -213,9 +217,9 @@ export function renderChatMessage(role, text) {
   
   msgDiv.appendChild(roleSpan);
   msgDiv.appendChild(textDiv);
-  elements.chatHistory.appendChild(msgDiv);
+  target.appendChild(msgDiv);
   
-  elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+  target.scrollTop = target.scrollHeight;
 }
 
 /**
@@ -233,8 +237,9 @@ export function renderOutline(onItemClick = null, onReorder = null, isReorderMod
     const isActive    = index === state.currentIndex;
     const isApproved  = state.slides.some(s => s.id === item.id);
     const isDraft     = !!state.draftSlides[item.id];
-    const isGenerating = !!state.generatingSlides[item.id];
-
+    const genStatus   = state.generatingSlides[item.id]; // true | 'QUEUED' | 'ERROR'
+    const error       = state.slideErrors[item.id];
+    
     let badge;
     if (index + 1 < 10) badge = `0${index + 1}`;
     else                 badge = `${index + 1}`;
@@ -247,13 +252,20 @@ export function renderOutline(onItemClick = null, onReorder = null, isReorderMod
 
     const phasePill = ''; // Removed to keep UI cleaner
 
-    const genBtnHtml = isReorderMode
-      ? '' // no gen buttons in reorder mode
-      : isApproved
-        ? `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`
-        : isGenerating
-          ? `<div class="loading-spinner-tiny"></div>`
-          : `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
+    let genBtnHtml = '';
+    if (!isReorderMode) {
+      if (isApproved) {
+        genBtnHtml = `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`;
+      } else if (genStatus === true) {
+        genBtnHtml = `<div class="loading-spinner-tiny"></div>`;
+      } else if (genStatus === 'QUEUED') {
+        genBtnHtml = `<span class="queued-badge" title="Waiting in queue...">🕒</span>`;
+      } else if (genStatus === 'ERROR') {
+        genBtnHtml = `<button class="gen-slide-btn error" data-index="${index}" title="Error: ${error || 'Unknown'}. Click to retry.">⚠</button>`;
+      } else {
+        genBtnHtml = `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
+      }
+    }
 
     // Drag handle — only visible in reorder mode
     const dragHandle = isReorderMode
@@ -549,17 +561,16 @@ export function renderImageThumbs(files, target) {
  */
 export function clearUI() {
   elements.promptInput.value = '';
-  elements.refineInstructionInput.value = '';
+  if (elements.refineInstructionInput) elements.refineInstructionInput.value = '';
+  if (elements.designPromptInput) elements.designPromptInput.value = '';
   elements.promptInput.disabled = false;
+  if (elements.designPromptInput) elements.designPromptInput.disabled = false;
   
   if (elements.refineImageInput) elements.refineImageInput.value = '';
-  if (elements.designRefInput) elements.designRefInput.value = '';
   elements.refineImageThumbs.innerHTML = '';
-  if (elements.designRefThumbs) elements.designRefThumbs.innerHTML = '';
-  if (elements.designRefSignal) elements.designRefSignal.innerHTML = '';
-  if (elements.designRefPanel) elements.designRefPanel.style.display = 'none';
   
   if (elements.chatHistory) elements.chatHistory.innerHTML = '';
+  if (elements.designChatHistory) elements.designChatHistory.innerHTML = '';
   elements.infoList.innerHTML = '<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Select a slide or generate an outline to see details.</div>';
   
   elements.statusText.textContent = 'IDLE';

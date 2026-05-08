@@ -47,10 +47,11 @@ class DeckSession(BaseModel):
 
     # ── Derived context (built by POST /synthesize) ────────────────────────────
     topic: str = ""
-    derived_color_palette: list[str] = []
-    derived_font_hints: list[str] = []
     hard_constraints: list[str] = []       # from instruction-role units
     deck_context: dict = {}                # full synthesized context JSON
+
+    # ── Design Config ──────────────────────────────────────────────────────────
+    design_config: dict = {}               # Loaded from / saved to design.json
 
     # ── Deck generation state ──────────────────────────────────────────────────
     outline: list[OutlineItem] = []

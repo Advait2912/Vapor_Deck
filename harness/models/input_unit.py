@@ -9,7 +9,6 @@ InputRole = Literal[
     "topic",        # the core subject — always one per session
     "reference",    # factual content to draw from (PDFs, docs, URLs, text)
     "instruction",  # hard rules the LLM must follow
-    "design_style", # visual/layout intent from images
 ]
 
 

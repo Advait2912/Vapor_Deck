@@ -10,7 +10,8 @@
 export {
   renderSlideInIframe as mountSlide,
   renderPlaceholderInIframe as mountPlaceholder,
-  buildSlideDocument,
+  buildBaseDocument,
+  ensureFontsInDocument,
   validateSlideHtml,
   _stripMarkdownFences as stripFences,
 } from './iframe.js';

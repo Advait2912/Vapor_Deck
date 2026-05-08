@@ -34,17 +34,18 @@ Return ONLY the raw JSON array — no text before or after, no markdown code fen
 
 Each slide object MUST have these exact keys:
 - "index": integer starting at 1
-- "title": string, the slide heading (max 8 words)
-- "intent": one of: title-hero, explain-concept, explain-mechanism, show-example, compare, list-points, code-walkthrough, summary
-- "key_points": array of 3-5 strings — what this slide MUST cover
-- "layout_hint": one of: single-column, two-column, code-left, hero-centered, bullet-list
+- "title": string, the slide heading
+- "intent": one of: title-hero, explain-concept, explain-mechanism, show-example, compare, list-points, code-walkthrough, summary, creative-visual, narrative-break
+- "key_points": array of 2-5 strings — what this slide MUST cover
+- "layout_hint": string describing the visual arrangement (e.g. "asymmetrical-overlap", "dark-mode-hero", "split-diagonal", etc.)
 
 Rules:
-- Generate exactly {preferred_slides} slides total (adjust slightly if content demands it, but stay close)
-- Slide 1 is ALWAYS intent: "title-hero" with layout_hint: "hero-centered"
-- Last slide is ALWAYS intent: "summary" with layout_hint: "bullet-list"
-- No two consecutive slides should have the same intent
-- Each slide covers different content — never repeat a key point
+- Generate exactly {preferred_slides} slides total.
+- You are a master storyteller. Don't stick to boring corporate structures.
+- Use 'creative-visual' for high-impact, low-text slides.
+- Use 'narrative-break' for transitional moments or bold quotes.
+- Vary the intent and layout frequently to keep the audience engaged.
+- Each slide covers different content — never repeat a key point.
 """
 
 

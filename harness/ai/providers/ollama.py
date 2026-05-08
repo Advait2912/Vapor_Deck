@@ -37,7 +37,7 @@ class OllamaProvider(BaseProvider):
             ],
             "stream": True,
             "options": {
-                "num_ctx": 8192  # Adjust this value based on your VRAM. 8192 is safer than 16384.
+                "num_ctx": 16384  # Adjusted for text models
             }
         }
 
@@ -80,7 +80,7 @@ class OllamaProvider(BaseProvider):
             }],
             "stream": False,
             "options": {
-                "num_ctx": 4096  # Adjusted for vision models
+                "num_ctx": 8192  # Adjusted for vision models
             }
         }
         async with httpx.AsyncClient(timeout=60) as client:

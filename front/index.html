@@ -66,6 +66,7 @@
             <!-- Mode Pill Toggle -->
             <div class="mode-pill" title="Ctrl+P to toggle">
               <button class="mode-pill-btn active" id="interaction-mode-plan" data-mode="plan">Outline</button>
+              <button class="mode-pill-btn" id="interaction-mode-design" data-mode="design">Design</button>
               <button class="mode-pill-btn" id="interaction-mode-build" data-mode="build">Build</button>
             </div>
 
@@ -86,12 +87,18 @@
                   placeholder="# slides"
                   style="width:56px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); border-radius:3px; padding:4px 6px; font-size:0.75rem; font-family:inherit; text-align:center;"
                 />
-                <!-- Design Reference trigger: hidden input + icon button -->
-                <input id="design-ref-input" type="file" accept="image/*" multiple style="display:none;" />
-                <button id="design-ref-btn" class="btn icon-btn" title="Upload a brand image or design reference — the AI will read the visual language from it">
-                  🎨
-                </button>
                 <button id="generate-btn" class="btn primary send-btn">Send</button>
+              </div>
+            </div>
+
+            <!-- Design Mode: Chat -->
+            <div id="design-interaction" class="interaction-pane" style="display:none;">
+              <div id="design-chat-history" class="chat-history">
+                <!-- Messages injected here -->
+              </div>
+              <div class="input-row">
+                <textarea id="design-prompt-input" class="cmd-input" placeholder="Chat with the Design AI to shape the aesthetics..." rows="1"></textarea>
+                <button id="design-generate-btn" class="btn primary send-btn">Send</button>
               </div>
             </div>
 
@@ -107,12 +114,7 @@
               <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
             </div>
 
-            <!-- Design Reference signal card — shown after a successful upload, hidden otherwise -->
-            <div id="design-ref-panel" style="display:none;">
-              <div id="design-ref-thumbs" class="thumb-strip" style="flex-shrink:0;"></div>
-              <div id="design-ref-signal" style="flex:1; min-width: 160px; font-size:0.72rem; color: var(--text-muted); line-height:1.55; display:flex; flex-direction:column; gap:4px;"></div>
-            </div>
-            
+
             <div id="refine-panel" style="display:none;">
               <div id="refine-image-thumbs" class="thumb-strip"></div>
             </div>
@@ -169,30 +171,18 @@
           <!-- Thumbnails of refinement history -->
         </div>
       </div>
-      <!-- Slideshow Overlay -->
-      <div id="slideshow-overlay" style="display:none; position:fixed; inset:0; background:#0a0a0a; z-index:200; flex-direction:column; align-items:center; justify-content:center;">
-        <!-- Top bar -->
-        <div style="position:absolute; top:0; left:0; right:0; height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); border-bottom:1px solid rgba(255,255,255,0.06);">
-          <span id="slideshow-counter" style="color:#888; font-size:0.75rem; font-family:monospace; letter-spacing:0.05em;">1 / 8</span>
-          <button id="slideshow-close" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#aaa; border-radius:3px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">✕ Esc</button>
+      <!-- Fullscreen Slideshow Overlay -->
+      <div id="slideshow-overlay">
+        <div id="slideshow-counter">0 / 0</div>
+        <button id="slideshow-close" class="slideshow-btn" title="Close (Esc)">×</button>
+        
+        <div id="slideshow-frame">
+          <iframe id="slideshow-iframe" frameborder="0"></iframe>
         </div>
-        <!-- Slide iframe (letterboxed 16:9) -->
-        <div id="slideshow-frame" style="
-          position:relative;
-          width: min(92vw, calc((100vh - 80px) * 16 / 9));
-          height: min(calc(92vw * 9 / 16), calc(100vh - 80px));
-          border-radius: 6px;
-          overflow: hidden;
-          box-shadow: 0 8px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.07);
-        ">
-          <iframe id="slideshow-iframe" frameborder="0" style="width:100%; height:100%; border:none; display:block;"></iframe>
-        </div>
-        <!-- Prev -->
-        <button id="slideshow-prev" style="position:absolute; left:16px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); color:#fff; border-radius:50%; width:46px; height:46px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s;">&#8249;</button>
-        <!-- Next -->
-        <button id="slideshow-next" style="position:absolute; right:16px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); color:#fff; border-radius:50%; width:46px; height:46px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s;">&#8250;</button>
-        <!-- Dot strip -->
-        <div id="slideshow-dots" style="position:absolute; bottom:16px; display:flex; gap:7px; align-items:center;"></div>
+
+        <button id="slideshow-prev" class="slideshow-btn" title="Previous (Left/Up)">‹</button>
+        <button id="slideshow-next" class="slideshow-btn" title="Next (Right/Down)">›</button>
+        <div id="slideshow-dots"></div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

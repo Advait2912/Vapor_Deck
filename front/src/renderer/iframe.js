@@ -34,7 +34,8 @@ const safePrismBash = _esc(prismBash);
 export function renderSlideInIframe(
   iframe,
   html,
-  theme = 'dark-tech'
+  theme = 'dark-tech',
+  fonts = []
 ) {
   if (!iframe) return;
 
@@ -46,7 +47,7 @@ export function renderSlideInIframe(
     !iframe.contentWindow ||
     !iframe.contentDocument
   ) {
-    iframe.srcdoc = buildBaseDocument(cleanHtml, theme);
+    iframe.srcdoc = buildBaseDocument(cleanHtml, theme, fonts);
     iframe.dataset.initialized = 'true';
     return;
   }
@@ -55,7 +56,8 @@ export function renderSlideInIframe(
   patchExistingIframe(
     iframe,
     cleanHtml,
-    theme
+    theme,
+    fonts
   );
 }
 
@@ -63,8 +65,11 @@ export function renderSlideInIframe(
 
 export function buildBaseDocument(
   slideHtml,
-  theme = 'dark-tech'
+  theme = 'dark-tech',
+  fonts = []
 ) {
+  const fontLink = _buildGoogleFontsLink(fonts);
+
   return `<!DOCTYPE html>
 <html lang="en">
 
@@ -75,6 +80,9 @@ export function buildBaseDocument(
     name="viewport"
     content="width=device-width, initial-scale=1.0"
   >
+
+  <!-- Dynamic Typography -->
+  ${fontLink}
 
   <!-- Theme CSS -->
   <link
@@ -127,12 +135,19 @@ export function buildBaseDocument(
       transform: translateY(0);
     }
 
-    /* Audit Mode: Stop all animations for instant capture */
+    /* Audit Mode: Stop all animations for a stable capture */
     body.audit-mode *,
     body.audit-mode *::before,
     body.audit-mode *::after {
       animation: none !important;
       transition: none !important;
+    }
+
+    /* Force content to be visible even if animations haven't finished */
+    body.audit-mode .reveal {
+      opacity: 1 !important;
+      visibility: visible !important;
+      transform: none !important;
     }
 
   </style>
@@ -242,7 +257,8 @@ export function buildBaseDocument(
 function patchExistingIframe(
   iframe,
   html,
-  theme
+  theme,
+  fonts = []
 ) {
 
   try {
@@ -259,13 +275,18 @@ function patchExistingIframe(
       iframe.srcdoc =
         buildBaseDocument(
           html,
-          theme
+          theme,
+          fonts
         );
 
       iframe.dataset.initialized = 'true';
 
       return;
     }
+
+    // If fonts changed, we might need a full rebuild or dynamic link injection.
+    // For simplicity and stability, if fonts are provided, we ensure the link exists.
+    ensureFontsInDocument(win.document, fonts);
 
     win.__PATCH_SLIDE__(html);
 
@@ -336,6 +357,63 @@ export function validateSlideHtml(html) {
     html.includes('<section') &&
     html.includes('slide')
   );
+}
+
+// ── Private Font Helpers ──────────────────────────────────────────────────────
+
+function _buildGoogleFontsLink(fonts = []) {
+  const core = ['Inter:wght@300;400;600;700', 'JetBrains+Mono:wght@400;700'];
+  
+  // Clean and deduplicate fonts
+  const cleanFonts = (fonts || []).map(f => {
+    // Remove "serif", "sans-serif" etc. and take the first family name
+    const family = f.split(',')[0].trim().replace(/['"]/g, '');
+    return family.replace(/ /g, '+');
+  }).filter(f => f && !['serif', 'sans-serif', 'monospace', 'inherit', 'initial'].includes(f.toLowerCase()));
+
+  const allFamilies = [...new Set([...core, ...cleanFonts])];
+  
+  // Request a range of weights (400, 700, 900) for each family to ensure 'true' weights
+  // Note: some fonts might not support all weights, but Google Fonts handles this gracefully
+  const queryParts = allFamilies.map(f => {
+    // If it already has weights (like core fonts), use as is
+    if (f.includes(':wght@')) return `family=${f}`;
+    // Otherwise add our standard broad range
+    return `family=${f}:wght@400;700;900`;
+  });
+
+  const url = `https://fonts.googleapis.com/css2?${queryParts.join('&')}&display=swap`;
+
+  return `
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="${url}" rel="stylesheet">
+  `;
+}
+
+export function ensureFontsInDocument(doc, fonts = []) {
+  if (!fonts || !fonts.length) return;
+  const linkId = 'dynamic-google-fonts';
+  
+  // Clean and deduplicate fonts
+  const requested = fonts.map(f => {
+    // Better cleaning: remove quotes and generic families
+    const family = f.split(',')[0].trim().replace(/['"]/g, '');
+    return family;
+  }).filter(f => f && !['serif', 'sans-serif', 'monospace', 'inherit', 'initial'].includes(f.toLowerCase()));
+
+  if (!requested.length) return;
+
+  const html = _buildGoogleFontsLink(requested);
+  const temp = doc.createElement('div');
+  temp.innerHTML = html;
+  
+  Array.from(temp.children).forEach(node => {
+    if (node.tagName === 'LINK' && node.rel === 'stylesheet') {
+      node.id = linkId;
+    }
+    doc.head.appendChild(node);
+  });
 }
 
 // ── Placeholder renderer ──────────────────────────────────────────────────────

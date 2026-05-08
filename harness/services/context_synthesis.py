@@ -35,11 +35,6 @@ SYNTHESIS_PROMPT = """You are synthesizing diverse inputs to build a presentatio
 === HARD CONSTRAINTS (NON-NEGOTIABLE — every slide must follow ALL of these) ===
 {constraints_text}
 
-=== STYLE SIGNALS FROM UPLOADED DESIGN FILES ===
-Color palette detected: {palette}
-Font hints: {fonts}
-Layout patterns observed: {layout_hints}
-
 Return ONLY this JSON:
 {{
   "topic": "concise topic title",
@@ -48,12 +43,7 @@ Return ONLY this JSON:
   "key_themes": ["3-6 major themes found in the references"],
   "key_facts": ["important facts, stats, or claims to include"],
   "narrative_arc": "1-2 sentences describing the story the deck should tell",
-  "hard_constraints": {constraints_json},
-  "style_intent": {{
-    "suggested_theme": "dark-tech OR clean-light OR brutalist",
-    "color_notes": "brief note on colors",
-    "layout_preference": "brief note on preferred layout style"
-  }}
+  "hard_constraints": {constraints_json}
 }}"""
 
 
@@ -80,16 +70,7 @@ async def synthesize_context(session: DeckSession, model) -> dict:
         "\n".join(f"- {c}" for c in constraints) if constraints else "none"
     )
 
-    # 3. Style signals
-    palette: list[str] = []
-    fonts: list[str] = []
-    layout_hints: list[str] = []
-    for unit in units_by_role.get("design_style", []):
-        palette.extend(unit.color_palette)
-        fonts.extend(unit.font_hints)
-        layout_hints.extend(unit.layout_hints)
-
-    # 4. Reference content — token-budget aware (max 6000 tokens)
+    # 3. Reference content — token-budget aware (max 6000 tokens)
     ref_chunks: list[str] = []
     budget_used = 0
     BUDGET = 6000
@@ -106,8 +87,7 @@ async def synthesize_context(session: DeckSession, model) -> dict:
         f"Synthesis: topic_units={len(units_by_role.get('topic', []))} "
         f"ref_units={len(units_by_role.get('reference', []))} "
         f"ref_tokens={budget_used} "
-        f"constraints={len(constraints)} "
-        f"design_units={len(units_by_role.get('design_style', []))}"
+        f"constraints={len(constraints)}"
     )
 
     # 5. LLM synthesis call
@@ -116,9 +96,6 @@ async def synthesize_context(session: DeckSession, model) -> dict:
         reference_text=reference_text[:24000],  # char safety cap
         constraints_text=constraints_text,
         constraints_json=json.dumps(constraints),
-        palette=palette[:6] or "none detected",
-        fonts=fonts[:4] or "none detected",
-        layout_hints=layout_hints[:4] or "none detected",
     )
 
     raw = await collect_stream(
@@ -140,17 +117,8 @@ async def synthesize_context(session: DeckSession, model) -> dict:
             "key_facts": [],
             "narrative_arc": "",
             "hard_constraints": constraints,
-            "style_intent": {
-                "suggested_theme": session.theme,
-                "color_notes": "",
-                "layout_preference": "",
-            },
         }
 
-    # Merge raw extracted style signals into the LLM output
-    ctx.setdefault("style_intent", {})
-    ctx["style_intent"]["extracted_palette"] = palette[:6]
-    ctx["style_intent"]["extracted_fonts"] = fonts[:4]
     ctx["input_unit_count"] = len(session.input_units)
     ctx["reference_tokens_used"] = budget_used
 

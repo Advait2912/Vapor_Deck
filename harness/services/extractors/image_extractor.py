@@ -66,7 +66,7 @@ async def extract_image(
         session_id=session_id,
         file_hash=file_hash,
         input_type=ext,
-        role="design_style",
+        role="reference",
         filename=filename,
         raw_path=f"sessions/{session_id}/assets/{filename}",
         visual_summary=audit.get("visual_summary"),
