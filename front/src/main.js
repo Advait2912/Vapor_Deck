@@ -37,6 +37,7 @@ import {
   updateMode,
   sendPlanChat,
   takeSnapshot,
+  addOutlineSlide,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -174,6 +175,24 @@ function setupGlobalControlListeners() {
     } else if (e.detail.reason === 'reordered') {
       reorderOutline(state.sessionId, e.detail.permutation)
         .catch(err => console.warn('Reorder sync failed:', err));
+
+    } else if (e.detail.reason === 'slide-added') {
+      const { newSlide } = e.detail;
+      addOutlineSlide(state.sessionId, {
+        title: newSlide.title,
+        intent: newSlide.intent,
+        key_points: newSlide.key_points,
+        layout_hint: newSlide.layout_hint,
+      }).then(res => {
+        // Sync backend's canonical (re-numbered) outline back to state
+        if (res.outline) {
+          updateState({ outline: res.outline });
+          refreshOutline();
+          // Navigate to the newly added slide (last item after re-numbering)
+          const newIdx = res.outline.length - 1;
+          navigateToSlide(newIdx);
+        }
+      }).catch(err => console.warn('Add slide sync failed:', err));
     }
   });
 
@@ -519,7 +538,8 @@ async function startGeneration(prompt) {
     state.status = 'OUTLINING';
     elements.generateBtn.textContent = 'Outlining...';
     updateUI();
-    const outlineData = await generateOutline(state.sessionId);
+    const preferredSlides = parseInt(document.getElementById('preferred-slides-input')?.value, 10) || 8;
+    const outlineData = await generateOutline(state.sessionId, preferredSlides);
     state.outline = outlineData.outline;
 
     state.status = 'REVIEWING_OUTLINE';

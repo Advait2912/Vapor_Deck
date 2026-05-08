@@ -130,7 +130,7 @@ async def synthesize(session_id: str):
 
 
 @router.post("/session/{session_id}/outline")
-async def generate_outline(session_id: str):
+async def generate_outline(session_id: str, preferred_slides: int = 8):
     try:
         session = get_session(session_id)
     except KeyError:
@@ -146,7 +146,7 @@ async def generate_outline(session_id: str):
     save_session(session)
 
     model = get_model(session.text_model)
-    prompt = build_outline_prompt(session.deck_context, session.theme)
+    prompt = build_outline_prompt(session.deck_context, session.theme, preferred_slides)
 
     if os.getenv("DEBUG_PROMPTS", "0") == "1":
         os.makedirs("debug", exist_ok=True)

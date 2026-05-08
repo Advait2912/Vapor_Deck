@@ -73,6 +73,16 @@
             </div>
             <div class="input-row">
               <textarea id="prompt-input" class="cmd-input" placeholder="Describe a topic, add slides, or refine the outline..." rows="1"></textarea>
+              <input
+                id="preferred-slides-input"
+                type="number"
+                min="3"
+                max="20"
+                value="8"
+                title="Preferred number of slides"
+                placeholder="# slides"
+                style="width:56px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); border-radius:3px; padding:4px 6px; font-size:0.75rem; font-family:inherit; text-align:center;"
+              />
               <button id="generate-btn" class="btn primary send-btn">Send</button>
             </div>
           </div>

@@ -54,8 +54,9 @@ export async function synthesize(sessionId) {
   return response.json();
 }
 
-export async function generateOutline(sessionId) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline`, { method: 'POST' });
+export async function generateOutline(sessionId, preferredSlides = 8) {
+  const url = `${BASE_URL}/session/${sessionId}/outline?preferred_slides=${preferredSlides}`;
+  const response = await fetch(url, { method: 'POST' });
   return response.json();
 }
 

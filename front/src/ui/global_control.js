@@ -199,10 +199,8 @@ function _bindGlobalControlEvents(container) {
       return;
     }
     
-    // Trigger AI-powered addition
-    window.dispatchEvent(new CustomEvent('global:add-slide-ai', { 
-      detail: { title, description } 
-    }));
+    // Trigger direct addition (backend synced via global:outline-changed handler)
+    addSlideToOutline({ title, description });
 
     // Reset and hide
     addPanel.style.display = 'none';

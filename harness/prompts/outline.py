@@ -38,7 +38,7 @@ Each slide object MUST have these exact keys:
 - "layout_hint": one of: single-column, two-column, code-left, hero-centered, bullet-list
 
 Rules:
-- Generate 5 to 8 slides total
+- Generate exactly {preferred_slides} slides total (adjust slightly if content demands it, but stay close)
 - Slide 1 is ALWAYS intent: "title-hero" with layout_hint: "hero-centered"
 - Last slide is ALWAYS intent: "summary" with layout_hint: "bullet-list"
 - No two consecutive slides should have the same intent
@@ -46,7 +46,7 @@ Rules:
 """
 
 
-def build_outline_prompt(ctx: dict, theme: str) -> str:
+def build_outline_prompt(ctx: dict, theme: str, preferred_slides: int = 8) -> str:
     style = ctx.get("style_intent", {})
     constraints = ctx.get("hard_constraints", [])
     return OUTLINE_PROMPT.format(
@@ -61,4 +61,5 @@ def build_outline_prompt(ctx: dict, theme: str) -> str:
         ),
         theme=theme,
         layout_preference=style.get("layout_preference", "no preference"),
+        preferred_slides=preferred_slides,
     )
