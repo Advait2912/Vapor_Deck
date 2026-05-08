@@ -55,9 +55,9 @@ function _collectSlidesInOrder() {
 
   state.outline.forEach((item, index) => {
     // Prefer approved → draft → latest
-    const approved = state.slides?.find(s => s.index === index);
-    const latest = state.latestSlides?.[index];
-    const draft = state.draftSlides?.[index];
+    const approved = state.slides?.find(s => s.id === item.id);
+    const latest = state.latestSlides?.[item.id];
+    const draft = state.draftSlides?.[item.id];
 
     const html = approved?.html || latest || draft;
     if (html) {
@@ -160,11 +160,11 @@ function _removePrintStyles() {
  * Useful for enabling/disabling the Export button.
  */
 export function getExportableSlideCount() {
-  return state.outline?.filter((_, index) => {
+  return state.outline?.filter((item) => {
     return !!(
-      state.slides?.some(s => s.index === index) ||
-      state.latestSlides?.[index] ||
-      state.draftSlides?.[index]
+      state.slides?.some(s => s.id === item.id) ||
+      state.latestSlides?.[item.id] ||
+      state.draftSlides?.[item.id]
     );
   }).length || 0;
 }

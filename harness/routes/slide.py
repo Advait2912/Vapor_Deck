@@ -207,11 +207,10 @@ async def session_chat(session_id: str, req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/session/{session_id}/slide/{n}")
-async def generate_slide(session_id: str, n: int, force: bool = False):
+@router.post("/session/{session_id}/slide/{slide_id}")
+async def generate_slide(session_id: str, slide_id: str, force: bool = False):
     """
-    Generate slide N as an SSE stream of HTML tokens.
-    n is 1-indexed (matches outline).
+    Generate slide by ID as an SSE stream of HTML tokens.
     """
     try:
         session = get_session(session_id)
@@ -225,15 +224,15 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
         )
 
     slide_spec = next(
-        (item for item in session.outline if item.index == n), None
+        (item for item in session.outline if item.id == slide_id), None
     )
     if not slide_spec:
-        raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
+        raise HTTPException(status_code=404, detail=f"Slide ID {slide_id} not found in outline")
 
-    # Check if slide already exists (use ID for stable mapping, fallback to index)
-    existing = next((s for s in session.slides if s.id == slide_spec.id), None)
-    if not existing:
-        existing = next((s for s in session.slides if s.index == n), None)
+    n = slide_spec.index
+
+    # Check if slide already exists
+    existing = next((s for s in session.slides if s.id == slide_id), None)
     
     if existing and existing.html and not force:
         logger.info(f"[{session_id}] slide {n} already exists, streaming from cache")
@@ -318,10 +317,10 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
         raise HTTPException(status_code=500, detail=f"Slide generation failed: {str(e)}")
 
 
-@router.post("/session/{session_id}/slide/{n}/approve")
-async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
+@router.post("/session/{session_id}/slide/{slide_id}/approve")
+async def approve_slide(session_id: str, slide_id: str, req: ApproveSlideRequest):
     """
-    Approve slide N. Updates deck_context and advances current_index.
+    Approve slide HTML for slide_id.
     """
     try:
         session = get_session(session_id)
@@ -329,28 +328,29 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
         raise HTTPException(status_code=404, detail="Session not found")
 
     slide_spec = next(
-        (item for item in session.outline if item.index == n), None
+        (item for item in session.outline if item.id == slide_id), None
     )
     if not slide_spec:
-        raise HTTPException(status_code=404, detail=f"Slide {n} not found in outline")
+        raise HTTPException(status_code=404, detail=f"Slide ID {slide_id} not found")
 
-    if not validate_slide_html(req.html):
-        raise HTTPException(
-            status_code=400,
-            detail="HTML does not appear to contain a valid slide section"
-        )
-
+    n = slide_spec.index
+    # Find existing slide data to preserve refinements/metadata
+    existing = next((s for s in session.slides if s.id == slide_id), None)
+    
     slide_data = SlideData(
-        id=slide_spec.id,
+        id=slide_id,
         index=n,
         title=slide_spec.title,
         html=req.html,
+        status="ready",
         approved=True,
+        refinements=existing.refinements if existing else [],
+        metadata=existing.metadata if existing else {}
     )
-    existing = next((s for s in session.slides if s.index == n), None)
-    if existing:
-        session.slides = [s if s.index != n else slide_data for s in session.slides]
-    else:
+
+    # Replace existing slide with same ID
+    session.slides = [s if s.id != slide_id else slide_data for s in session.slides]
+    if not any(s.id == slide_id for s in session.slides):
         session.slides.append(slide_data)
 
     session.current_index = n
@@ -406,10 +406,10 @@ async def approve_slide(session_id: str, n: int, req: ApproveSlideRequest):
     }
 
 
-@router.post("/session/{session_id}/slide/{n}/refine")
-async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
+@router.post("/session/{session_id}/slide/{slide_id}/refine")
+async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
     """
-    Refine slide N with a specific mode. Returns SSE stream.
+    Refine slide by ID with a specific mode. Returns SSE stream.
     """
     try:
         session = get_session(session_id)
@@ -421,13 +421,14 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         raise HTTPException(status_code=400, detail=f"mode must be one of: {valid_modes}")
 
     slide_spec = next(
-        (item for item in session.outline if item.index == n), None
+        (item for item in session.outline if item.id == slide_id), None
     )
     if not slide_spec:
-        raise HTTPException(status_code=404, detail=f"Slide {n} not found")
+        raise HTTPException(status_code=404, detail=f"Slide ID {slide_id} not found")
 
+    n = slide_spec.index
     from models.session import SlideData
-    slide_data = next((s for s in session.slides if s.index == n), None)
+    slide_data = next((s for s in session.slides if s.id == slide_id), None)
     if not slide_data:
         slide_data = SlideData(
             id=slide_spec.id,
@@ -456,6 +457,10 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         max_tokens=1500,
     )
 
+    # Get available local assets
+    asset_dir = get_project_dir() / "assets"
+    asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
     prompt = build_slide_prompt(
         n=n,
         total=len(session.outline),
@@ -466,6 +471,8 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         theme=session.theme,
         deck_context=session.deck_context,
         relevant_chunks=relevant,
+        asset_filenames=asset_filenames,
+        is_refinement=True,
     )
 
     if req.current_html:

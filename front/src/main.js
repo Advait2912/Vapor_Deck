@@ -121,16 +121,22 @@ const SESSION_VIEW_PREFIX = 'vapordeck:view:';
 
 function beginSlideJob(index) {
   const id = ++slideJobCounter;
-  latestJobBySlide[index] = id;
+  const slideId = getSlideId(index);
+  if (slideId) latestJobBySlide[slideId] = id;
   return id;
 }
 
 function isLatestSlideJob(index, id) {
-  return latestJobBySlide[index] === id;
+  const slideId = getSlideId(index);
+  return slideId ? latestJobBySlide[slideId] === id : false;
 }
 
 function getSessionViewKey(sessionId) {
   return `${SESSION_VIEW_PREFIX}${sessionId}`;
+}
+
+function getSlideId(index) {
+  return state.outline[index]?.id;
 }
 
 function loadSessionViewState(sessionId) {
@@ -148,8 +154,8 @@ function persistSessionViewState() {
   const payload = {
     draftSlides: state.draftSlides || {},
     latestSlides: state.latestSlides || {},
-    promptApplyingIndices: Object.keys(state.promptApplyingSlides || {}).map(Number),
-    generatingIndices: Object.keys(state.generatingSlides || {}).map(Number),
+    promptApplyingIds: Object.keys(state.promptApplyingSlides || {}),
+    generatingIds: Object.keys(state.generatingSlides || {}),
     currentIndex: state.currentIndex || 0,
     currentSlideHtml: state.currentSlideHtml || '',
     messages: state.messages || [],
@@ -171,15 +177,16 @@ function clearSessionViewState(sessionId) {
 }
 
 function resumeGeneratingSlidesFromCache() {
-  const indices = Object.keys(state.generatingSlides || {}).map(Number);
-  if (!indices.length) return;
+  const ids = Object.keys(state.generatingSlides || {});
+  if (!ids.length) return;
   // ONLY resume slides that are NOT already approved
-  indices.forEach((idx) => {
-    const isApproved = state.slides.some(s => s.index === idx);
-    if (!isApproved) {
-      startSlideGeneration(idx, true);
+  ids.forEach((id) => {
+    const isApproved = state.slides.some(s => s.id === id);
+    const outlineItem = state.outline.find(s => s.id === id);
+    if (!isApproved && outlineItem) {
+      startSlideGeneration(outlineItem.index - 1, true);
     } else {
-      delete state.generatingSlides[idx];
+      delete state.generatingSlides[id];
     }
   });
 }
@@ -187,9 +194,11 @@ function resumeGeneratingSlidesFromCache() {
 function syncStatusFromState() {
   const hasActiveJobs = Object.keys(state.generatingSlides || {}).length > 0;
   if (state.status === 'REVIEWING_OUTLINE') return;
+  
+  const currentId = getSlideId(state.currentIndex);
   if (hasActiveJobs) {
     state.status = 'GENERATING';
-  } else if (state.draftSlides?.[state.currentIndex] || state.currentSlideHtml) {
+  } else if ((currentId && state.draftSlides?.[currentId]) || state.currentSlideHtml) {
     state.status = 'REVIEWING';
   } else if (state.outline.length && state.slides.length === state.outline.length) {
     state.status = 'DONE';
@@ -291,9 +300,10 @@ Please integrate this into the outline at the most logical position. Return the 
   window.addEventListener('global:generate-all', () => {
     if (!state.sessionId || !state.outline.length) return;
     if (state.status === 'REVIEWING_OUTLINE') return;
-    state.outline.forEach((_, idx) => {
-      const isBuilt = !!state.latestSlides[idx] || state.slides.some(s => s.index === idx);
-      if (!isBuilt && !state.generatingSlides[idx]) {
+    state.outline.forEach((item, idx) => {
+      const id = item.id;
+      const isBuilt = !!state.latestSlides[id] || state.slides.some(s => s.id === id);
+      if (!isBuilt && !state.generatingSlides[id]) {
         startSlideGeneration(idx, false);
       }
     });
@@ -475,25 +485,31 @@ async function loadProjectInfo() {
       const draftSlides = { ...(cached.draftSlides || {}) };
       
       // Merge backend data (backend wins for all generated slides)
-      const allBackendSlides = (session.slides || []).map(s => ({ index: (s.index || 1) - 1, html: s.html }));
-      allBackendSlides.forEach(s => { 
-        latestSlides[s.index] = s.html; 
-        // If it's in the backend, it's no longer a local-only draft
-        delete draftSlides[s.index];
+      (session.slides || []).forEach(s => { 
+        if (s.id) {
+          latestSlides[s.id] = s.html; 
+          // If it's in the backend, it's no longer a local-only draft
+          delete draftSlides[s.id];
+        }
       });
 
-      const generatingSlides = (cached.generatingIndices || []).reduce((acc, idx) => {
-        acc[idx] = true; return acc;
+      const generatingSlides = (cached.generatingIds || []).reduce((acc, id) => {
+        acc[id] = true; return acc;
+      }, {});
+
+      const promptApplyingSlides = (cached.promptApplyingIds || []).reduce((acc, id) => {
+        acc[id] = true; return acc;
       }, {});
 
       updateState({
         sessionId: session.session_id,
         outline: session.outline || [],
-        slides: (session.slides || []).map(s => ({ ...s, index: s.index - 1 })),
+        slides: session.slides || [],
         draftSlides,
         latestSlides,
         generatingSlides,
-        status: backendStatus.toUpperCase(),
+        promptApplyingSlides,
+        status: (session.session_status || backendStatus).toUpperCase(),
         currentIndex: cached.currentIndex ?? (session.current_index || 0),
         currentSlideHtml: cached.currentSlideHtml || '',
         theme: session.theme || 'dark-tech',
@@ -721,6 +737,7 @@ async function handlePlanChat(message) {
 // ── Outline Navigation ───────────────────────────────────────────────────────────
 function navigateToSlide(index) {
   state.currentIndex = index;
+  const id = getSlideId(index);
 
   if (state.status === 'REVIEWING_OUTLINE') {
     renderSlideInfo(index);
@@ -729,7 +746,7 @@ function navigateToSlide(index) {
     return;
   }
 
-  if (state.promptApplyingSlides[index]) {
+  if (id && state.promptApplyingSlides[id]) {
     state.status = 'GENERATING';
     mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${index + 1}...`);
     renderOutline(navigateToSlide);
@@ -738,7 +755,7 @@ function navigateToSlide(index) {
     return;
   }
 
-  const latest = state.latestSlides[index];
+  const latest = id ? state.latestSlides[id] : null;
   if (latest) {
     state.currentSlideHtml = latest;
     state.status = 'REVIEWING';
@@ -749,7 +766,7 @@ function navigateToSlide(index) {
     return;
   }
 
-  const draft = state.draftSlides[index];
+  const draft = id ? state.draftSlides[id] : null;
   if (draft) {
     state.currentSlideHtml = draft;
     state.status = 'REVIEWING';
@@ -760,7 +777,7 @@ function navigateToSlide(index) {
     return;
   }
 
-  const saved = state.slides.find(s => s.index === index);
+  const saved = id ? state.slides.find(s => s.id === id) : null;
   if (saved) {
     state.currentSlideHtml = saved.html;
     state.status = 'REVIEWING';
@@ -800,10 +817,14 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
     state.mode = 'build';
     updateMode(state.sessionId, 'build').catch(() => {});
   }
+  
+  const id = getSlideId(index);
 
   state.status = 'GENERATING';
-  state.generatingSlides[index] = true;
-  delete state.promptApplyingSlides[index];
+  if (id) {
+    state.generatingSlides[id] = true;
+    delete state.promptApplyingSlides[id];
+  }
   const runToken = sessionRunToken;
   const jobId = beginSlideJob(index);
   updateUI();
@@ -823,7 +844,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   activeSlideControllers.set(index, controller);
 
   try {
-    const stream = streamSlide(state.sessionId, slideNum, 'generate', { force }, controller.signal);
+    const stream = streamSlide(state.sessionId, id, 'generate', { force }, controller.signal);
     for await (const token of stream) {
       const t = token;
       slideHtml += t;
@@ -836,8 +857,10 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
       hideLoadingBar();
     }
 
-    state.draftSlides[index] = slideHtml;
-    state.latestSlides[index] = slideHtml;
+    if (id) {
+      state.draftSlides[id] = slideHtml;
+      state.latestSlides[id] = slideHtml;
+    }
 
     if (index === state.currentIndex && runToken === sessionRunToken) {
       state.currentSlideHtml = slideHtml;
@@ -870,7 +893,7 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
   } finally {
     if (isLatestSlideJob(index, jobId)) {
       activeSlideControllers.delete(index);
-      delete state.generatingSlides[index];
+      if (id) delete state.generatingSlides[id];
     }
     if (runToken === sessionRunToken && isLatestSlideJob(index, jobId)) {
       syncStatusFromState();
@@ -885,13 +908,16 @@ async function startSlideGeneration(index = state.currentIndex, force = false) {
 async function _runVisionAuditInBackground(index, slideNum, html) {
   if (!state.sessionId) return;
 
+  const id = getSlideId(index);
+  if (!id) return;
+
   // Versioning: discard results from a superseded audit run (race condition fix)
   const jobToken = ++auditJobCounter;
-  latestAuditJobBySlide[index] = jobToken;
-  const isLatestAuditJob = () => latestAuditJobBySlide[index] === jobToken;
+  latestAuditJobBySlide[id] = jobToken;
+  const isLatestAuditJob = () => latestAuditJobBySlide[id] === jobToken;
 
   // Track that this slide is actively being audited
-  state.auditingSlides[index] = jobToken;
+  state.auditingSlides[id] = jobToken;
 
   const isCurrent = () => state.currentIndex === index;
 
@@ -908,8 +934,6 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
 
   try {
     // Render into an isolated offscreen iframe — fully decoupled from the live preview.
-    // This prevents the race where navigation or concurrent generation swaps the
-    // visible iframe content between the wait and the capture.
     let snapshotB64 = null;
     try {
       snapshotB64 = await captureHtmlOffscreen(html, state.theme);
@@ -917,7 +941,7 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
       console.warn('Offscreen capture failed, proceeding without screenshot:', captureErr);
     }
 
-    const result = await takeSnapshot(state.sessionId, slideNum, html, snapshotB64);
+    const result = await takeSnapshot(state.sessionId, id, html, snapshotB64, id);
 
     // Discard if a newer audit for this slide has already started
     if (!isLatestAuditJob()) return;
@@ -928,19 +952,20 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
     const refinePrompt = result?.refine_prompt || null;
 
     // Store the audit result in the dedicated map
-    state.slideAudits[index] = audit || { verdict: 'audit_failed', visual_issues: ['Audit engine error'] };
+    state.slideAudits[id] = audit || { verdict: 'audit_failed', visual_issues: ['Audit engine error'] };
 
     // Persist the current HTML as final (no auto-fix replacement)
-    state.slides = state.slides.filter(s => s.index !== index);
+    state.slides = state.slides.filter(s => s.id !== id);
     state.slides.push({
+      id: id,
       index: index,
       html: html,
-      audit: state.slideAudits[index],
+      audit: state.slideAudits[id],
       approved: true,
       status: 'ready'
     });
-    state.latestSlides[index] = html;
-    delete state.draftSlides[index];
+    state.latestSlides[id] = html;
+    delete state.draftSlides[id];
     
     persistSessionViewState();
 
@@ -952,13 +977,13 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
   } catch (err) {
     if (!isLatestAuditJob()) return;
     console.warn('Vision audit failed (non-fatal):', err);
-    state.slideAudits[index] = { verdict: 'audit_failed', visual_issues: [err.message] };
+    state.slideAudits[id] = { verdict: 'audit_failed', visual_issues: [err.message] };
     if (isCurrent()) {
       _applyAuditToIndicator('audit_failed', false, false, [err.message]);
     }
   } finally {
     if (isLatestAuditJob()) {
-      delete state.auditingSlides[index];
+      delete state.auditingSlides[id];
       refreshOutline();
       updateUI();
     }
@@ -1176,7 +1201,8 @@ function showAuditToast(message, type = 'info') {
 
 // ── Slide Refinement ──────────────────────────────────────────────────────────
 async function startRefinement(mode, instruction = '') {
-  const currentHtml = state.draftSlides[state.currentIndex] || state.currentSlideHtml;
+  const id = getSlideId(state.currentIndex);
+  const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
   if (!currentHtml?.trim()) return;
 
   const instructionText = instruction || elements.refineInstructionInput?.value?.trim() || '';
@@ -1192,7 +1218,7 @@ async function startRefinement(mode, instruction = '') {
   try {
     const stream = streamSlide(
       state.sessionId,
-      state.currentIndex + 1,
+      id,
       'refine',
       {
         refineMode: mode,
@@ -1381,10 +1407,14 @@ async function customRegenerateWithPrompt() {
   elements.refineInstructionInput.value = '';
   elements.refineInstructionInput.style.height = 'auto';
 
-  state.slides = state.slides.filter(s => s.index !== index);
+  const id = getSlideId(index);
+
+  state.slides = state.slides.filter(s => id ? s.id !== id : s.index !== index);
   state.status = 'GENERATING';
-  state.generatingSlides[index] = true;
-  state.promptApplyingSlides[index] = true;
+  if (id) {
+    state.generatingSlides[id] = true;
+    state.promptApplyingSlides[id] = true;
+  }
   refreshOutline();
   updateUI();
   persistSessionViewState();
@@ -1394,7 +1424,7 @@ async function customRegenerateWithPrompt() {
   let regenerated = '';
   activeRefineController = new AbortController();
   try {
-    const stream = streamSlide(state.sessionId, slideNum, 'refine', {
+    const stream = streamSlide(state.sessionId, id, 'refine', {
       refineMode: 'expand',
       currentHtml,
       instruction,
@@ -1408,9 +1438,11 @@ async function customRegenerateWithPrompt() {
     if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
     if (!regenerated.trim()) throw new Error('Empty regenerated slide');
 
-    state.draftSlides[index] = regenerated;
-    state.latestSlides[index] = regenerated;
-    delete state.promptApplyingSlides[index];
+    if (id) {
+      state.draftSlides[id] = regenerated;
+      state.latestSlides[id] = regenerated;
+      delete state.promptApplyingSlides[id];
+    }
     if (state.currentIndex === index) {
       hideLoadingBar();
       state.currentSlideHtml = regenerated;
@@ -1425,17 +1457,17 @@ async function customRegenerateWithPrompt() {
     if (error?.name !== 'AbortError') {
       console.error('Custom regeneration failed:', error);
       state.status = 'ERROR';
-      delete state.promptApplyingSlides[index];
+      if (id) delete state.promptApplyingSlides[id];
       if (state.currentIndex === index) {
         mountPlaceholder(elements.slideIframe, `Custom regenerate failed: ${error.message}`);
       }
     } else {
-      delete state.promptApplyingSlides[index];
+      if (id) delete state.promptApplyingSlides[id];
     }
   } finally {
     if (!isLatestSlideJob(index, jobId)) return;
     activeRefineController = null;
-    delete state.generatingSlides[index];
+    if (id) delete state.generatingSlides[id];
     syncStatusFromState();
     refreshOutline();
     updateUI();
@@ -1523,7 +1555,8 @@ function initSlideshow() {
     dots.innerHTML = '';
     state.outline.forEach((_, i) => {
       const dot = document.createElement('div');
-      const isBuilt = !!state.latestSlides[i];
+      const id = getSlideId(i);
+      const isBuilt = id ? !!state.latestSlides[id] : !!state.latestSlides[i];
       dot.style.cssText = `width:7px;height:7px;border-radius:50%;cursor:pointer;transition:all 0.15s;background:${
         i === currentIdx ? '#fff' : isBuilt ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)'
       };transform:${i === currentIdx ? 'scale(1.3)' : 'scale(1)'};`;
@@ -1536,7 +1569,8 @@ function initSlideshow() {
     const total = state.outline.length;
     if (!total) return;
     currentIdx = (idx + total) % total;
-    const rawHtml = state.latestSlides[currentIdx];
+    const id = getSlideId(currentIdx);
+    const rawHtml = id ? state.latestSlides[id] : state.latestSlides[currentIdx];
     if (rawHtml) {
       // Use the same renderer as the main preview so theme CSS loads correctly
       iframe.srcdoc = buildBaseDocument(rawHtml, state.theme || 'dark-tech');
@@ -1593,12 +1627,15 @@ window.addEventListener('update-slide-title', async (e) => {
   const { index, title } = e.detail;
   if (!state.outline[index]) return;
   
+  const id = getSlideId(index);
   const oldTitle = state.outline[index].title;
   state.outline[index].title = title;
   
   try {
-    await updateSlideTitle(state.sessionId, index, title);
-    showAuditToast(`Slide ${index + 1} renamed to: ${title}`, 'info');
+    if (id) {
+      await updateSlideTitle(state.sessionId, id, title);
+      showAuditToast(`Slide ${index + 1} renamed to: ${title}`, 'info');
+    }
   } catch (err) {
     console.error('Failed to update title:', err);
     state.outline[index].title = oldTitle; // rollback

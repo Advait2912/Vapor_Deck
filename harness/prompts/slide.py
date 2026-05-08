@@ -87,25 +87,24 @@ INTENT_GUIDANCE = {
 }
 
 
-def _build_brand_section(style_intent: dict, topic: str = "") -> str:
+def _build_brand_section(style_intent: dict, theme: str = "dark-tech", topic: str = "", is_refinement: bool = False) -> str:
     """
-    Build a MANDATORY BRAND ENFORCEMENT or THEMATIC STYLING prompt block.
-
-    If brand signals exist, it enforces them. If not, it instructs the LLM
-    to infer a palette based on the topic.
+    Build a BRAND ENFORCEMENT or THEMATIC STYLING prompt block.
     """
     palette      = style_intent.get("extracted_palette", [])
     fonts        = style_intent.get("extracted_fonts", [])
     color_notes  = style_intent.get("color_notes", "")
     layout_pref  = style_intent.get("layout_preference", "")
 
+    is_dark_theme = any(t in theme.lower() for t in ["dark", "black", "night", "tech", "glass"])
+
     # Case A: Brand signals exist
     if palette or color_notes:
+        status_text = "(GUIDELINE — maintain consistency)" if is_refinement else "(MANDATORY — apply to this slide)"
         lines = [
             "",
-            "=== BRAND ENFORCEMENT (MANDATORY — apply to this slide) ===",
-            "A design reference image was uploaded. The following visual identity MUST be reflected in this slide.",
-            "Failure to apply these overrides means the slide does not match the client's brand.",
+            f"=== BRAND ENFORCEMENT {status_text} ===",
+            "A design reference image was provided. The visual identity below MUST be reflected.",
             "",
         ]
         if palette:
@@ -113,15 +112,30 @@ def _build_brand_section(style_intent: dict, topic: str = "") -> str:
             lines += [
                 f"Extracted colour palette: {palette_str}",
                 "",
-                "REQUIRED ACTION — at the VERY TOP of your <style> block, before any other rules, add:",
+                "ACTION: At the VERY TOP of your <style> block, define/override these variables:",
                 "  section.slide {",
-                "    --bg:          <darkest palette colour — slide background>;",
-                "    --surface:     <second-darkest — panel / card backgrounds>;",
-                "    --accent:      <most vibrant / saturated brand colour — buttons, highlights>;",
-                "    --accent-glow: <rgba() version of accent at 0.3 opacity — glow effects>;",
-                "    --text:        <lightest colour readable as foreground text>;",
+            ]
+            
+            if is_dark_theme:
+                lines += [
+                    "    /* Theme: DARK - ensure background is very dark for tech feel */",
+                    f"    --bg:          {palette[0] if palette[0].startswith('#0') or palette[0].startswith('#1') else '#0a0b1e'}; /* Use darkest brand color or deep tech-black */",
+                    f"    --surface:     {palette[0]}; /* Dark brand surface */",
+                    f"    --accent:      {palette[1] if len(palette)>1 else palette[0]}; /* Vibrant brand highlight */",
+                    f"    --text:        {palette[-1]}; /* Lightest brand colour */",
+                ]
+            else:
+                lines += [
+                    "    --bg:          <darkest palette colour — slide background>;",
+                    "    --surface:     <second-darkest — panel / card backgrounds>;",
+                    "    --accent:      <most vibrant / saturated brand colour>;",
+                    "    --text:        <lightest colour readable as foreground text>;",
+                ]
+                
+            lines += [
+                "    --accent-glow: <rgba() version of accent at 0.3 opacity>;",
                 "    --text-muted:  <muted text, 60–70% opacity blend of --text>;",
-                "    --border:      <low-opacity palette colour for dividers and outlines>;",
+                "    --border:      <low-opacity palette colour>;",
                 "  }",
             ]
         if color_notes:
@@ -133,38 +147,34 @@ def _build_brand_section(style_intent: dict, topic: str = "") -> str:
             "",
             "=== THEMATIC STYLING (MANDATORY — apply to this slide) ===",
             f"Topic: {topic}",
-            "No design reference was provided. You MUST infer a custom professional colour palette",
-            "that fits the mood and subject of this topic.",
+            "No design reference provided. Infer a custom professional palette for this topic.",
             "",
-            "REQUIRED ACTION — at the VERY TOP of your <style> block, redefine the theme variables:",
+            "REQUIRED ACTION: Define variables at the top of <style>:",
             "  section.slide {",
-            "    --bg:          <thematic background colour>;",
+            "    --bg:          <thematic background>;",
             "    --surface:     <thematic panel/card background>;",
-            "    --accent:      <thematic accent colour (vibrant/saturated)>;",
+            "    --accent:      <vibrant thematic accent>;",
+            "    --text:        <high contrast text>;",
             "    --accent-glow: <rgba() version of accent at 0.3 opacity>;",
-            "    --text:        <readable text colour (high contrast against --bg)>;",
-            "    --text-muted:  <lower opacity text>;",
             "    --border:      <divider/border colour>;",
             "  }",
-            "Choose a palette that feels premium and industry-appropriate for the subject matter.",
+        ]
+
+    if is_refinement:
+        lines += [
+            "",
+            "NOTE: Since this is a REFINEMENT, you may deviate from the specific palette mappings above",
+            "if the user's specific instruction requires a different mood (e.g., 'make it darker' or 'change the accent').",
         ]
 
     if fonts:
         font_list = ", ".join(f"'{f}'" for f in fonts[:3])
-        lines += [
-            "",
-            f"Font guidance: prefer {font_list} where available as system fonts.",
-        ]
+        lines += ["", f"Font guidance: prefer {font_list} where available."]
 
     if layout_pref:
         lines += ["", f"Layout directive: {layout_pref}"]
 
-    lines += [
-        "",
-        "CRITICAL: The section.slide { } variable overrides are MANDATORY. Do NOT fall back to default theme colours.",
-        "=== END STYLING SECTION ===\n",
-    ]
-
+    lines += ["", "=== END STYLING SECTION ===\n"]
     return "\n".join(lines)
 
 
@@ -179,6 +189,7 @@ def build_slide_prompt(
     deck_context: dict,
     relevant_chunks: str = "",
     asset_filenames: list[str] | None = None,
+    is_refinement: bool = False,
 ) -> str:
     # Summarize deck context (narrative / terms / facts) — brand signals are
     # now handled by _build_brand_section, NOT included here to avoid duplication.
@@ -191,7 +202,7 @@ def build_slide_prompt(
     style_intent = synthesis.get("style_intent", deck_context.get("style_intent", {}))
     topic = synthesis.get("topic", deck_context.get("topic", ""))
     
-    brand_section = _build_brand_section(style_intent, topic)
+    brand_section = _build_brand_section(style_intent, theme, topic, is_refinement)
 
     # Format the asset list section
     asset_section = _build_asset_section(asset_filenames)

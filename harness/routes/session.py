@@ -483,17 +483,18 @@ async def remove_slide_from_outline(session_id: str, n: int):
         "outline": [item.model_dump() for item in session.outline],
         "total_slides": len(session.outline),
     }
-@router.put("/session/{session_id}/outline/{index}/title")
-async def update_slide_title(session_id: str, index: int, req: UpdateTitleRequest):
+@router.put("/session/{session_id}/slide/{slide_id}/title")
+async def update_slide_title(session_id: str, slide_id: str, req: UpdateTitleRequest):
     try:
         session = get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    if index < 0 or index >= len(session.outline):
-        raise HTTPException(status_code=404, detail="Slide index out of bounds")
+    item = next((s for s in session.outline if s.id == slide_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Slide ID not found")
         
-    session.outline[index].title = req.title
+    item.title = req.title
     save_session(session)
-    logger.info(f"[{session_id}] slide {index} title updated to: {req.title}")
+    logger.info(f"[{session_id}] slide {slide_id} title updated to: {req.title}")
     return {"status": "ok"}

@@ -139,10 +139,15 @@ export function updateUI() {
   refreshVisionIndicator();
 }
 
+function getSlideId(index) {
+  return state.outline[index]?.id;
+}
+
 function refreshVisionIndicator() {
   const index = state.currentIndex;
-  const isAuditing = !!state.auditingSlides?.[index];
-  const audit = state.slideAudits?.[index];
+  const id = getSlideId(index);
+  const isAuditing = id ? !!state.auditingSlides?.[id] : false;
+  const audit = id ? state.slideAudits?.[id] : null;
 
   // Default state: slide exists but has no audit result yet
   elements.visionIndicator.style.display = 'flex';
@@ -226,9 +231,9 @@ export function renderOutline(onItemClick = null, onReorder = null, isReorderMod
   }
   elements.outlineList.innerHTML = state.outline.map((item, index) => {
     const isActive    = index === state.currentIndex;
-    const isApproved  = state.slides.some(s => s.index === index);
-    const isDraft     = !!state.draftSlides[index];
-    const isGenerating = !!state.generatingSlides[index];
+    const isApproved  = state.slides.some(s => s.id === item.id);
+    const isDraft     = !!state.draftSlides[item.id];
+    const isGenerating = !!state.generatingSlides[item.id];
 
     let badge;
     if (index + 1 < 10) badge = `0${index + 1}`;
@@ -451,8 +456,9 @@ export function renderSlideInfo(index) {
     return;
   }
 
-  const isApproved  = state.slides.some(s => s.index === index);
-  const isDraft     = !!state.draftSlides[index];
+  const id = item.id;
+  const isApproved  = state.slides.some(s => s.id === id);
+  const isDraft     = !!state.draftSlides[id];
 
   elements.infoList.innerHTML = `
     <div class="fade-in">

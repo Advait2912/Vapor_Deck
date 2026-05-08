@@ -96,11 +96,11 @@ export async function sendPlanChat(sessionId, message, currentSlideIndex, signal
 /**
  * Stream slide generation or refinement as an async generator.
  */
-export async function* streamSlide(sessionId, slideIndex, mode = 'generate', extra = {}, signal) {
+export async function* streamSlide(sessionId, slideId, mode = 'generate', extra = {}, signal) {
   const isRefine = mode === 'refine';
   let endpoint = isRefine
-    ? `${BASE_URL}/session/${sessionId}/slide/${slideIndex}/refine`
-    : `${BASE_URL}/session/${sessionId}/slide/${slideIndex}`;
+    ? `${BASE_URL}/session/${sessionId}/slide/${slideId}/refine`
+    : `${BASE_URL}/session/${sessionId}/slide/${slideId}`;
 
   if (!isRefine && extra.force) {
     endpoint += '?force=true';
@@ -167,8 +167,8 @@ export async function* streamSlide(sessionId, slideIndex, mode = 'generate', ext
   }
 }
 
-export async function approveSlide(sessionId, slideIndex, html) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/approve`, {
+export async function approveSlide(sessionId, slideId, html) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideId}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ html })
@@ -177,19 +177,23 @@ export async function approveSlide(sessionId, slideIndex, html) {
 }
 
 /**
- * Send an html2canvas screenshot + slide HTML to the backend for vision audit.
  * Returns { snapshot_b64, audit, refine_prompt, auto_fixed }.
  * Fire-and-update: call after slide generation, don't block the UI on it.
  */
-export async function takeSnapshot(sessionId, slideIndex, html, snapshotB64 = null) {
+export async function takeSnapshot(sessionId, slideId, html, snapshotB64 = null, id = null) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
   try {
-    const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/snapshot`, {
+    const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideId}/snapshot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, snapshot_b64: snapshotB64, run_audit: true }),
+      body: JSON.stringify({ 
+        id, // Pass stable UUID
+        html, 
+        snapshot_b64: snapshotB64, 
+        run_audit: true 
+      }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -213,8 +217,8 @@ export async function takeSnapshot(sessionId, slideIndex, html, snapshotB64 = nu
 
 // ── Global control API calls ───────────────────────────────────────────────────
 
-export async function updateSlideTitle(sessionId, index, title) {
-  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/${index}/title`, {
+export async function updateSlideTitle(sessionId, slideId, title) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideId}/title`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title })

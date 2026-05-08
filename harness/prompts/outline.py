@@ -24,6 +24,8 @@ Narrative arc: {narrative_arc}
 
 === STYLE ===
 Theme: {theme}
+Palette: {palette}
+Fonts: {fonts}
 Layout preference: {layout_preference}
 
 === TASK ===
@@ -49,6 +51,10 @@ Rules:
 def build_outline_prompt(ctx: dict, theme: str, preferred_slides: int = 8) -> str:
     style = ctx.get("style_intent", {})
     constraints = ctx.get("hard_constraints", [])
+    
+    palette = ", ".join(style.get("extracted_palette", [])) or "not specified"
+    fonts = ", ".join(style.get("extracted_fonts", [])) or "not specified"
+
     return OUTLINE_PROMPT.format(
         topic=ctx.get("topic", ""),
         audience=ctx.get("audience", "general audience"),
@@ -60,6 +66,8 @@ def build_outline_prompt(ctx: dict, theme: str, preferred_slides: int = 8) -> st
             "\n".join(f"- {c}" for c in constraints) if constraints else "none"
         ),
         theme=theme,
+        palette=palette,
+        fonts=fonts,
         layout_preference=style.get("layout_preference", "no preference"),
         preferred_slides=preferred_slides,
     )

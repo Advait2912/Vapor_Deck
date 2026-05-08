@@ -35,6 +35,10 @@ VISION_AUDIT_PROMPT = """You are auditing a rendered HTML presentation slide scr
 === SLIDE HTML (for reference) ===
 {html_snippet}
 
+=== DESIGN INTENT ===
+Theme: {theme}
+Style Intent: {style_intent}
+
 === YOUR TASK ===
 Look at the attached screenshot carefully AND inspect the HTML. Check for these specific issues:
 
@@ -71,7 +75,11 @@ CRITICAL: Be CONSERVATIVE about "regenerate" — only use it for truly broken la
 """
 
 
-def build_vision_audit_prompt(html: str) -> str:
-    """Build the vision audit prompt with the slide HTML snippet."""
+def build_vision_audit_prompt(html: str, theme: str = "dark-tech", style_intent: str = "none") -> str:
+    """Build the vision audit prompt with the slide HTML snippet and design context."""
     html_snippet = html[:6000] if len(html) > 6000 else html
-    return VISION_AUDIT_PROMPT.format(html_snippet=html_snippet)
+    return VISION_AUDIT_PROMPT.format(
+        html_snippet=html_snippet,
+        theme=theme,
+        style_intent=style_intent
+    )

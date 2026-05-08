@@ -43,6 +43,8 @@ async def _run_vision_audit(
     screenshot_b64: str,
     html: str,
     vision_model,
+    theme: str = "dark-tech",
+    style_intent: str = "none",
     slide_index: Optional[int] = None,
     session_id: str = "unknown",
 ) -> VisionAuditResult:
@@ -50,7 +52,7 @@ async def _run_vision_audit(
     Send a base64 screenshot to the vision model for layout audit.
     Returns VisionAuditResult. Fails with verdict='audit_failed' on error.
     """
-    prompt = build_vision_audit_prompt(html)
+    prompt = build_vision_audit_prompt(html, theme=theme, style_intent=style_intent)
     raw = ""
     try:
         raw = await vision_model.vision_audit(prompt, screenshot_b64)
@@ -131,10 +133,15 @@ async def capture_and_audit(
             visual_issues=["No screenshot provided — skipping visual audit"],
         )
 
+    import json
+    style_intent_str = json.dumps(session.deck_context.get("style_intent", {})) if hasattr(session, "deck_context") else "none"
+
     audit = await _run_vision_audit(
         screenshot_b64=screenshot_b64,
         html=html,
         vision_model=vision_model,
+        theme=getattr(session, "theme", "dark-tech"),
+        style_intent=style_intent_str,
         slide_index=slide_spec.index if slide_spec else None,
         session_id=session.session_id if hasattr(session, "session_id") else "unknown",
     )

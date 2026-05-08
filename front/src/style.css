@@ -291,17 +291,42 @@ main {
   100% { width: 92%; }
 }
 
-/* ── Interaction Bar ─────────────────────────────────────────────────────── */
-.interaction-bar {
+/* ── Interaction Shell (resizable container) ─────────────────────────────── */
+#interaction-shell {
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: var(--interaction-height);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.interaction-bar {
   padding: 10px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: var(--interaction-height);
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
   box-sizing: border-box;
+}
+
+#design-ref-panel, #refine-panel {
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+#refine-panel {
+  padding: 12px 16px;
 }
 
 /* Mode Pill Toggle */

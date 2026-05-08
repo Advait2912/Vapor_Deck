@@ -5,14 +5,14 @@ export const state = {
   sessionId: null,
   outline: [],
   slides: [],
-  draftSlides: {},
-  latestSlides: {},
-  promptApplyingSlides: {},
-  generatingSlides: {},
+  draftSlides: {},        // id → draft HTML
+  latestSlides: {},       // id → latest HTML
+  promptApplyingSlides: {}, // id → true/false
+  generatingSlides: {},   // id → true/false
   // Vision audit state — stored separately from HTML strings so audit results
-  // survive navigation and approval. Both are index-keyed maps.
-  slideAudits: {},    // index → VisionAuditResult object (persisted in localStorage)
-  auditingSlides: {}, // index → jobToken (in-flight only, not persisted)
+  // survive navigation and approval. Both are ID-keyed maps.
+  slideAudits: {},    // id → VisionAuditResult object (persisted in localStorage)
+  auditingSlides: {}, // id → jobToken (in-flight only, not persisted)
   currentIndex: 0,
   currentSlideHtml: '',
   status: 'IDLE', // IDLE | OUTLINING | GENERATING | REVIEWING | DONE

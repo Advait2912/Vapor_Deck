@@ -25,13 +25,14 @@ router = APIRouter()
 
 
 class SnapshotRequest(BaseModel):
+    id: str  # Stable UUID from the outline
     html: str
     snapshot_b64: str | None = None
     run_audit: bool = True
 
 
-@router.post("/session/{session_id}/slide/{n}/snapshot")
-async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
+@router.post("/session/{session_id}/slide/{slide_id}/snapshot")
+async def take_snapshot(session_id: str, slide_id: str, req: SnapshotRequest):
     """
     Receive a frontend screenshot, run vision audit, persist slide, return result.
     """
@@ -46,7 +47,8 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
     vision_model = get_model(session.vision_model)
     text_model = get_model(session.text_model)
 
-    slide_spec = next((item for item in session.outline if item.index == n), None)
+    slide_spec = next((item for item in session.outline if item.id == slide_id), None)
+    n = slide_spec.index if slide_spec else 0
 
     screenshot_b64 = req.snapshot_b64
     audit_result: VisionAuditResult | None = None
@@ -92,10 +94,11 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
             logger.warning(f"[{session_id}] Failed to save snapshot: {e}")
 
     # Persist slide HTML + metadata
-    existing_slide = next((s for s in session.slides if s.index == n), None)
+    existing_slide = next((s for s in session.slides if s.id == req.id), None)
     if not existing_slide:
         from models.session import SlideData
         existing_slide = SlideData(
+            id=req.id,
             index=n,
             title=slide_spec.title if slide_spec else f"Slide {n}",
             html=req.html,
@@ -105,6 +108,7 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
         session.slides.append(existing_slide)
     else:
         existing_slide.html = req.html
+        existing_slide.index = n  # Keep index updated in case of reorder
         existing_slide.approved = True
         existing_slide.status = "ready"
 

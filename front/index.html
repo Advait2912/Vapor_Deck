@@ -59,61 +59,65 @@
         </div>
 
         <div id="v-resizer" class="v-resizer"></div>
-        <div class="interaction-bar">
+        
+        <section id="interaction-shell">
+          <div class="interaction-bar">
 
-          <!-- Mode Pill Toggle -->
-          <div class="mode-pill" title="Ctrl+P to toggle">
-            <button class="mode-pill-btn active" id="interaction-mode-plan" data-mode="plan">Outline</button>
-            <button class="mode-pill-btn" id="interaction-mode-build" data-mode="build">Build</button>
-          </div>
-
-          <!-- Plan Mode: Chat -->
-          <div id="plan-interaction" class="interaction-pane">
-            <div id="chat-history" class="chat-history">
-              <!-- Messages injected here -->
+            <!-- Mode Pill Toggle -->
+            <div class="mode-pill" title="Ctrl+P to toggle">
+              <button class="mode-pill-btn active" id="interaction-mode-plan" data-mode="plan">Outline</button>
+              <button class="mode-pill-btn" id="interaction-mode-build" data-mode="build">Build</button>
             </div>
-            <div class="input-row">
-              <textarea id="prompt-input" class="cmd-input" placeholder="Describe a topic, add slides, or refine the outline..." rows="1"></textarea>
-              <input
-                id="preferred-slides-input"
-                type="number"
-                min="3"
-                max="20"
-                value="8"
-                title="Preferred number of slides"
-                placeholder="# slides"
-                style="width:56px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); border-radius:3px; padding:4px 6px; font-size:0.75rem; font-family:inherit; text-align:center;"
-              />
-              <!-- Design Reference trigger: hidden input + icon button -->
-              <input id="design-ref-input" type="file" accept="image/*" multiple style="display:none;" />
-              <button id="design-ref-btn" class="btn icon-btn" title="Upload a brand image or design reference — the AI will read the visual language from it">
-                🎨
-              </button>
-              <button id="generate-btn" class="btn primary send-btn">Send</button>
-            </div>
-          </div>
 
-          <!-- Build Mode: Refine -->
-          <div id="build-interaction" class="interaction-pane" style="display:none;">
-            <div class="input-row">
-              <textarea id="refine-instruction-input" class="cmd-input" placeholder="Describe a visual change, content update, or layout fix..." rows="1"></textarea>
-              <div class="build-actions">
-                <button id="custom-regen-btn" class="btn primary refine-btn">Refine ✦</button>
-                <button id="regen-btn" class="btn icon-btn" title="Regenerate slide from scratch">↻</button>
+            <!-- Plan Mode: Chat -->
+            <div id="plan-interaction" class="interaction-pane">
+              <div id="chat-history" class="chat-history">
+                <!-- Messages injected here -->
+              </div>
+              <div class="input-row">
+                <textarea id="prompt-input" class="cmd-input" placeholder="Describe a topic, add slides, or refine the outline..." rows="1"></textarea>
+                <input
+                  id="preferred-slides-input"
+                  type="number"
+                  min="3"
+                  max="20"
+                  value="8"
+                  title="Preferred number of slides"
+                  placeholder="# slides"
+                  style="width:56px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-main); border-radius:3px; padding:4px 6px; font-size:0.75rem; font-family:inherit; text-align:center;"
+                />
+                <!-- Design Reference trigger: hidden input + icon button -->
+                <input id="design-ref-input" type="file" accept="image/*" multiple style="display:none;" />
+                <button id="design-ref-btn" class="btn icon-btn" title="Upload a brand image or design reference — the AI will read the visual language from it">
+                  🎨
+                </button>
+                <button id="generate-btn" class="btn primary send-btn">Send</button>
               </div>
             </div>
-            <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
-          </div>
 
-        </div>
-        <!-- Design Reference signal card — shown after a successful upload, hidden otherwise -->
-        <div id="design-ref-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 8px 16px; gap: 10px; align-items: flex-start; flex-wrap: wrap;">
-          <div id="design-ref-thumbs" class="thumb-strip" style="flex-shrink:0;"></div>
-          <div id="design-ref-signal" style="flex:1; min-width: 160px; font-size:0.72rem; color: var(--text-muted); line-height:1.55; display:flex; flex-direction:column; gap:4px;"></div>
-        </div>
-        <div id="refine-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 10px 20px;">
-          <div id="refine-image-thumbs" class="thumb-strip"></div>
-        </div>
+            <!-- Build Mode: Refine -->
+            <div id="build-interaction" class="interaction-pane" style="display:none;">
+              <div class="input-row">
+                <textarea id="refine-instruction-input" class="cmd-input" placeholder="Describe a visual change, content update, or layout fix..." rows="1"></textarea>
+                <div class="build-actions">
+                  <button id="custom-regen-btn" class="btn primary refine-btn">Refine ✦</button>
+                  <button id="regen-btn" class="btn icon-btn" title="Regenerate slide from scratch">↻</button>
+                </div>
+              </div>
+              <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
+            </div>
+
+            <!-- Design Reference signal card — shown after a successful upload, hidden otherwise -->
+            <div id="design-ref-panel" style="display:none;">
+              <div id="design-ref-thumbs" class="thumb-strip" style="flex-shrink:0;"></div>
+              <div id="design-ref-signal" style="flex:1; min-width: 160px; font-size:0.72rem; color: var(--text-muted); line-height:1.55; display:flex; flex-direction:column; gap:4px;"></div>
+            </div>
+            
+            <div id="refine-panel" style="display:none;">
+              <div id="refine-image-thumbs" class="thumb-strip"></div>
+            </div>
+          </div>
+        </section>
       </main>
 
       <div id="r-resizer" class="resizer"></div>
