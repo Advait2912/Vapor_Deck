@@ -26,10 +26,7 @@
             <option value="openai/gpt-4o">GPT-4o</option>
           </select>
           
-          <div class="mode-toggle">
-            <button id="plan-mode-btn" class="mode-btn active" data-mode="plan">PLAN</button>
-            <button id="build-mode-btn" class="mode-btn" data-mode="build">BUILD</button>
-          </div>
+
 
           <button id="new-deck-btn" class="btn" title="Discard current session and start fresh">↺ New Deck</button>
           <button id="export-btn" class="btn primary">Export PDF</button>
@@ -62,40 +59,42 @@
 
         <div id="v-resizer" class="v-resizer"></div>
         <div class="interaction-bar">
-          <!-- Plan Mode Interaction: Chat Focus -->
-          <div id="plan-interaction" style="flex: 1; display: flex; flex-direction: column; gap: 12px; height: 100%; overflow: hidden;">
-            <div id="chat-history" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 8px; font-size: 0.85rem;">
-              <!-- Messages will be injected here -->
+
+          <!-- Mode Pill Toggle -->
+          <div class="mode-pill" title="Ctrl+P to toggle">
+            <button class="mode-pill-btn active" id="interaction-mode-plan" data-mode="plan">Outline</button>
+            <button class="mode-pill-btn" id="interaction-mode-build" data-mode="build">Build</button>
+          </div>
+
+          <!-- Plan Mode: Chat -->
+          <div id="plan-interaction" class="interaction-pane">
+            <div id="chat-history" class="chat-history">
+              <!-- Messages injected here -->
             </div>
-            <div style="display: flex; gap: 12px; align-items: stretch;">
-              <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
-                <textarea id="prompt-input" placeholder="Discuss the deck outline and refine slide content..." style="flex: 1; min-height: 60px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 12px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.9rem; line-height: 1.5;"></textarea>
-              </div>
-              <div style="display: flex; flex-direction: column; gap: 6px; justify-content: stretch;">
-                <button id="generate-btn" class="btn primary" style="flex: 1; padding: 0 24px;">Send</button>
-              </div>
+            <div class="input-row">
+              <textarea id="prompt-input" class="cmd-input" placeholder="Describe a topic, add slides, or refine the outline..." rows="1"></textarea>
+              <button id="generate-btn" class="btn primary send-btn">Send</button>
             </div>
           </div>
 
-          <!-- Build Mode Interaction: Refine Focus -->
-          <div id="build-interaction" style="display: none; width: 100%; gap: 12px; align-items: center;">
-            <div id="refine-input-container" style="flex: 1; display: flex; gap: 12px; align-items: center;">
-              <textarea id="refine-instruction-input" placeholder="Refine visual layout, colors, or specific elements..." style="flex: 1; min-height: 40px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); padding: 10px; border-radius: 4px; outline: none; resize: none; font-family: inherit; font-size: 0.85rem;"></textarea>
-              <div style="display: flex; gap: 8px;">
-                <label class="btn" for="refine-image-input" style="padding: 6px 10px;" title="Attach assets"><span style="font-size: 1.2rem;">⊕</span></label>
-                <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
+          <!-- Build Mode: Refine -->
+          <div id="build-interaction" class="interaction-pane" style="display:none;">
+            <div class="input-row">
+              <textarea id="refine-instruction-input" class="cmd-input" placeholder="Describe a visual change, content update, or layout fix..." rows="1"></textarea>
+              <div class="build-actions">
+                <button id="custom-regen-btn" class="btn primary refine-btn">Refine ✦</button>
+                <button id="regen-btn" class="btn icon-btn" title="Regenerate slide from scratch">↻</button>
               </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn" id="regen-btn">↻ Regen</button>
-              <button class="btn primary" id="approve-btn">Approve Slide →</button>
-            </div>
+            <input id="refine-image-input" type="file" accept="image/*" multiple style="display:none;" />
           </div>
+
         </div>
         <div id="refine-panel" style="display:none; background: var(--bg-panel); border-top: 1px solid var(--border); padding: 10px 20px;">
           <div id="refine-image-thumbs" class="thumb-strip"></div>
         </div>
       </main>
+
       <div id="r-resizer" class="resizer"></div>
       <aside id="info-sidebar" class="info-sidebar">
         <div class="sidebar-header">Slide Details</div>

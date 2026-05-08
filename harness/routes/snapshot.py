@@ -1,23 +1,24 @@
 """
-SNAPSHOT ROUTE — FIXED
-───────────────────────
 POST /api/session/{id}/slide/{n}/snapshot
 
-Fixes:
-  - validate_and_maybe_fix() called with correct positional args matching service signature
-  - capture_and_audit() called with correct args
-  - Graceful fallback when Playwright unavailable
+Accepts an html2canvas screenshot from the frontend, runs the vision audit,
+persists the slide + snapshot to disk, and returns the audit result with
+a refine_prompt the user can apply on demand.
 """
+import asyncio
+import base64
+import glob
 import logging
+import os
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ai.router import get_model
-from store.sessions import get_session, save_session
 from models.audit import VisionAuditResult
-
-import time
+from store.sessions import get_session, save_session
+from .slide import _update_context_in_background
 
 logger = logging.getLogger("snapshot_route")
 router = APIRouter()
@@ -25,14 +26,14 @@ router = APIRouter()
 
 class SnapshotRequest(BaseModel):
     html: str
+    snapshot_b64: str | None = None
     run_audit: bool = True
-    auto_fix: bool = True
 
 
 @router.post("/session/{session_id}/slide/{n}/snapshot")
 async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
     """
-    Render slide N to a screenshot, run vision audit, optionally auto-fix.
+    Receive a frontend screenshot, run vision audit, persist slide, return result.
     """
     try:
         session = get_session(session_id)
@@ -45,57 +46,13 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
     vision_model = get_model(session.vision_model)
     text_model = get_model(session.text_model)
 
-    slide_spec = next(
-        (item for item in session.outline if item.index == n), None
-    )
+    slide_spec = next((item for item in session.outline if item.index == n), None)
 
-    fixed_html = None
-    audit_result = None
-    screenshot_b64 = None
+    screenshot_b64 = req.snapshot_b64
+    audit_result: VisionAuditResult | None = None
 
-    if not req.run_audit:
-        # Fast path: just take screenshot, no audit
-        from services.snapshot import _playwright_capture
-        try:
-            screenshot_b64 = await _playwright_capture(req.html, session.theme)
-        except Exception as e:
-            logger.warning(f"[{session_id}] Playwright unavailable: {e}")
-
-        return {
-            "snapshot_b64": screenshot_b64,
-            "audit": {"verdict": "good", "visual_issues": [], "skipped": True},
-            "fixed_html": None,
-            "auto_fixed": False,
-        }
-
-    # Full pipeline: capture → audit → maybe auto-fix
-    from services.snapshot import capture_and_audit, validate_and_maybe_fix
-
-    if req.auto_fix and slide_spec:
-        # Use the full pipeline with auto-fix
-        # validate_and_maybe_fix(html, session, text_model, vision_model, slide_spec)
-        try:
-            final_html, audit_result = await validate_and_maybe_fix(
-                html=req.html,
-                session=session,
-                text_model=text_model,
-                vision_model=vision_model,
-                slide_spec=slide_spec,
-            )
-
-            screenshot_b64 = audit_result.snapshot_b64 if audit_result else None
-
-            # If auto-fix changed the HTML, return it
-            if final_html and final_html.strip() != req.html.strip():
-                fixed_html = final_html
-
-        except Exception as e:
-            logger.warning(f"[{session_id}] validate_and_maybe_fix failed (non-fatal): {e}")
-            # Fall through to audit-only path
-            audit_result = VisionAuditResult(verdict="good", visual_issues=[f"Pipeline error: {e}"])
-
-    else:
-        # Audit only, no fix
+    if req.run_audit:
+        from services.snapshot import capture_and_audit
         try:
             screenshot_b64, audit_result = await capture_and_audit(
                 html=req.html,
@@ -103,70 +60,84 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
                 text_model=text_model,
                 vision_model=vision_model,
                 slide_spec=slide_spec,
-                auto_fix=False,
+                existing_b64=screenshot_b64,
             )
         except Exception as e:
-            logger.warning(f"[{session_id}] capture_and_audit failed (non-fatal): {e}")
-            audit_result = VisionAuditResult(verdict="good", visual_issues=[f"Audit error: {e}"])
+            logger.warning(f"[{session_id}] capture_and_audit failed: {e}")
+            audit_result = VisionAuditResult(verdict="audit_failed", visual_issues=[str(e)])
 
-    # BUG 17: Save snapshot to filesystem to prevent session bloat
+    # Persist snapshot PNG to disk
     snapshot_url = None
     if screenshot_b64:
         try:
-            import base64
-            import os
-            import glob
             from store.sessions import get_project_dir
-            
-            # Use session_id and slide index for unique filename
-            # We add a timestamp to prevent browser caching issues
             timestamp = int(time.time())
             filename = f"{session_id}_slide_{n}_{timestamp}.png"
-            
-            # Save to project dir snapshots folder
             snapshot_dir = get_project_dir() / "snapshots"
             os.makedirs(snapshot_dir, exist_ok=True)
 
-            # Clean up old snapshots for this specific slide before writing the new one
-            old_pattern = str(snapshot_dir / f"{session_id}_slide_{n}_*.png")
-            for old_file in glob.glob(old_pattern):
+            # Remove previous snapshots for this slide
+            for old in glob.glob(str(snapshot_dir / f"{session_id}_slide_{n}_*.png")):
                 try:
-                    os.remove(old_file)
+                    os.remove(old)
                 except OSError:
                     pass
 
-            filepath = snapshot_dir / filename
-            
-            with open(filepath, "wb") as f:
+            with open(snapshot_dir / filename, "wb") as f:
                 f.write(base64.b64decode(screenshot_b64))
-            
+
             snapshot_url = f"/api/snapshots/{filename}"
-            logger.info(f"[{session_id}] Snapshot saved: {filepath}")
+            logger.info(f"[{session_id}] Snapshot saved: {filename}")
         except Exception as e:
-            logger.warning(f"[{session_id}] Failed to save snapshot to FS: {e}")
+            logger.warning(f"[{session_id}] Failed to save snapshot: {e}")
 
-    # Store metadata in session slide data
-    if snapshot_url or audit_result:
-        existing_slide = next((s for s in session.slides if s.index == n), None)
-        if existing_slide:
-            if snapshot_url:
-                existing_slide.snapshot_url = snapshot_url
-                # Keep b64 as None to save space in JSON
-                existing_slide.snapshot_b64 = None 
-            if audit_result:
-                existing_slide.audit = audit_result.model_dump()
-            save_session(session)
+    # Persist slide HTML + metadata
+    existing_slide = next((s for s in session.slides if s.index == n), None)
+    if not existing_slide:
+        from models.session import SlideData
+        existing_slide = SlideData(
+            index=n,
+            title=slide_spec.title if slide_spec else f"Slide {n}",
+            html=req.html,
+            approved=True,
+            status="ready",
+        )
+        session.slides.append(existing_slide)
+    else:
+        existing_slide.html = req.html
+        existing_slide.approved = True
+        existing_slide.status = "ready"
 
-    logger.info(
-        f"[{session_id}] slide {n} snapshot: "
-        f"verdict={audit_result.verdict if audit_result else 'N/A'} "
-        f"fixed={fixed_html is not None}"
-    )
+    if snapshot_url:
+        existing_slide.snapshot_url = snapshot_url
+        existing_slide.snapshot_b64 = None
+    if audit_result:
+        existing_slide.audit = audit_result.model_dump()
+
+    save_session(session)
+
+    # Save individual slide files for direct serving / export
+    try:
+        from store.sessions import get_project_dir
+        slides_dir = get_project_dir() / "slides"
+        with open(slides_dir / f"slide_{n:02d}.html", "w", encoding="utf-8") as f:
+            f.write(req.html)
+        with open(slides_dir / f"slide_{n:02d}.json", "w", encoding="utf-8") as f:
+            f.write(existing_slide.model_dump_json(indent=2))
+        logger.info(f"[{session_id}] slide {n} files saved")
+    except Exception as e:
+        logger.error(f"[{session_id}] Failed to save slide {n} files: {e}")
+
+    # Trigger background deck-context update
+    asyncio.create_task(_update_context_in_background(session_id, req.html, session.text_model))
+
+    verdict = audit_result.verdict if audit_result else "N/A"
+    logger.info(f"[{session_id}] slide {n} snapshot complete — verdict={verdict}")
 
     return {
         "snapshot_b64": screenshot_b64,
         "snapshot_url": snapshot_url,
         "audit": audit_result.model_dump() if audit_result else {"verdict": "good"},
-        "fixed_html": fixed_html,
-        "auto_fixed": fixed_html is not None,
+        "refine_prompt": audit_result.refine_prompt if audit_result else None,
+        "auto_fixed": False,
     }

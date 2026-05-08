@@ -1,12 +1,6 @@
 /**
  * API Client for Vapor Deck
  * Handles session creation, slide generation via SSE, snapshots, and global controls.
- *
- * Changes from original:
- *   - takeSnapshot now actually calls the backend (was a stub)
- *   - Added updateDeckSettings for global control sync
- *   - Added reorderOutline and removeOutlineSlide for global control
- * All existing exports preserved exactly.
  */
 
 const BASE_URL = 'http://localhost:8000/api';
@@ -71,6 +65,10 @@ export async function confirmOutline(sessionId, outline) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outline })
   });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to confirm outline: ${errText}`);
+  }
   return response.json();
 }
 
@@ -99,9 +97,13 @@ export async function sendPlanChat(sessionId, message, currentSlideIndex, signal
  */
 export async function* streamSlide(sessionId, slideIndex, mode = 'generate', extra = {}, signal) {
   const isRefine = mode === 'refine';
-  const endpoint = isRefine
+  let endpoint = isRefine
     ? `${BASE_URL}/session/${sessionId}/slide/${slideIndex}/refine`
     : `${BASE_URL}/session/${sessionId}/slide/${slideIndex}`;
+
+  if (!isRefine && extra.force) {
+    endpoint += '?force=true';
+  }
 
   const body = isRefine
     ? JSON.stringify({
@@ -157,42 +159,50 @@ export async function approveSlide(sessionId, slideIndex, html) {
 }
 
 /**
- * Take a Playwright snapshot + vision audit of a slide.
- * Returns { snapshot_b64, audit, fixed_html, auto_fixed }.
- *
- * This is fire-and-update: call after slide generation, don't block the UI.
- * If the backend doesn't have Playwright installed, gracefully returns { audit: { verdict: 'good' } }.
+ * Send an html2canvas screenshot + slide HTML to the backend for vision audit.
+ * Returns { snapshot_b64, audit, refine_prompt, auto_fixed }.
+ * Fire-and-update: call after slide generation, don't block the UI on it.
  */
-export async function takeSnapshot(sessionId, slideIndex, html) {
-  // 60-second timeout — Playwright + LLM audit can take 15-30s on slow hardware.
-  // Without this the indicator hangs on "ANALYZING..." forever if the server stalls.
+export async function takeSnapshot(sessionId, slideIndex, html, snapshotB64 = null) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
   try {
     const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideIndex}/snapshot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, run_audit: true, auto_fix: true }),
+      body: JSON.stringify({ html, snapshot_b64: snapshotB64, run_audit: true }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
     if (!response.ok) {
-      return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
+      return { snapshot_b64: null, audit: { verdict: 'good' }, refine_prompt: null, auto_fixed: false };
     }
     return response.json();
   } catch (err) {
     clearTimeout(timeoutId);
     if (err?.name === 'AbortError') {
-      // Timed out — return a special flag so the UI can show "TIMED OUT"
-      return { snapshot_b64: null, audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 60 seconds'] }, fixed_html: null, auto_fixed: false };
+      return {
+        snapshot_b64: null,
+        audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 120 seconds'] },
+        refine_prompt: null,
+        auto_fixed: false,
+      };
     }
-    // Playwright may not be installed — that's fine
-    return { snapshot_b64: null, audit: { verdict: 'good' }, fixed_html: null, auto_fixed: false };
+    return { snapshot_b64: null, audit: { verdict: 'good' }, refine_prompt: null, auto_fixed: false };
   }
 }
 
-// ── NEW: Global control API calls ─────────────────────────────────────────────
+// ── Global control API calls ───────────────────────────────────────────────────
+
+export async function updateSlideTitle(sessionId, index, title) {
+  const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/${index}/title`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  return response.json();
+}
 
 /**
  * Update deck-wide settings (tone, audience, narrative structure).

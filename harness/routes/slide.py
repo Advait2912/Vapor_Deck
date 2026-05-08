@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ai.router import get_model
 from store.sessions import get_session, save_session
-from models.session import SlideData
+from models.session import SlideData, OutlineItem
 from services.stream_utils import collect_stream, strip_fences, validate_slide_html
 from services.context_synthesis import get_relevant_chunks
 from prompts.slide import build_slide_prompt, SLIDE_SYSTEM
@@ -88,8 +88,7 @@ async def session_chat(session_id: str, req: ChatRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.mode != "plan":
-        raise HTTPException(status_code=400, detail="Chat is only available in Plan Mode or during Outline Review")
+    # Allow chat in any mode to enable fluid additions/refinements
 
     model = get_model(session.text_model)
     
@@ -97,23 +96,22 @@ async def session_chat(session_id: str, req: ChatRequest):
     PLAN_SYSTEM = """
     You are the Content Architect for Vapor Deck. 
     Your goal is to refine the slide outline (metadata) based on the user's request.
-    You MUST ONLY output a JSON object representing the updated outline items.
     
-    The user is in PLAN MODE. You are NOT generating HTML. You are refining the PLAN.
+    You can:
+    1. UPDATE existing slides (by using their current index).
+    2. ADD new slides (by using an index that doesn't exist yet, or appending to the end).
+    3. REORDER slides (by shifting their indices).
     
-    You can update the 'title', 'intent', 'key_points', and 'layout_hint' for any slide.
+    You MUST output a JSON object with two fields:
+    - "updates": An array of slide objects (index, title, intent, key_points, layout_hint).
+    - "message": A brief, friendly explanation of what you did (e.g., "I've added a new slide about X and adjusted the flow...").
     
-    Output format:
+    Example Output:
     {
         "updates": [
-            {
-                "index": 1,
-                "title": "New Title",
-                "intent": "new-intent",
-                "key_points": ["point 1", "point 2"],
-                "layout_hint": "new-layout"
-            }
-        ]
+            { "index": 8, "title": "New Insights", "intent": "list-points", "key_points": ["A", "B"], "layout_hint": "bullet-list" }
+        ],
+        "message": "I added a slide for the new insights as requested."
     }
     """
     
@@ -135,29 +133,54 @@ async def session_chat(session_id: str, req: ChatRequest):
         data = json.loads(strip_fences(raw_response))
         updates = data.get("updates", [])
         
+        # Track which indices we've seen to handle additions vs updates
+        existing_indices = {item.index for item in session.outline}
+        
         for update in updates:
             idx = update.get("index")
-            for item in session.outline:
-                if item.index == idx:
-                    if "title" in update: item.title = update["title"]
-                    if "intent" in update: item.intent = update["intent"]
-                    if "key_points" in update: item.key_points = update["key_points"]
-                    if "layout_hint" in update: item.layout_hint = update["layout_hint"]
+            if idx is None:
+                continue
+                
+            if idx in existing_indices:
+                # UPDATE existing
+                for item in session.outline:
+                    if item.index == idx:
+                        if "title" in update: item.title = str(update["title"])
+                        if "intent" in update: item.intent = str(update["intent"])
+                        if "key_points" in update: item.key_points = list(update["key_points"])
+                        if "layout_hint" in update: item.layout_hint = str(update["layout_hint"])
+            else:
+                # ADD new slide
+                new_item = OutlineItem(
+                    index=idx,
+                    title=str(update.get("title", "New Slide")),
+                    intent=str(update.get("intent", "explain-concept")),
+                    key_points=list(update.get("key_points", ["Key point 1"])),
+                    layout_hint=str(update.get("layout_hint", "single-column"))
+                )
+                session.outline.append(new_item)
+        
+        # Always re-sort and re-number to ensure consistency
+        session.outline.sort(key=lambda x: (x.index or 999))
+        for i, item in enumerate(session.outline):
+            item.index = i + 1
         
         save_session(session)
         return {
             "status": "ok", 
+            "session_status": session.status,
             "outline": [item.model_dump() for item in session.outline],
-            "message": "I've updated the outline according to your request. Please review the changes in the sidebar."
+            "message": data.get("message") or "I've updated the outline according to your request. Please review the changes in the sidebar."
         }
         
     except Exception as e:
-        logger.error(f"Chat failed: {e}")
+        import traceback
+        logger.error(f"[{session_id}] chat failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/session/{session_id}/slide/{n}")
-async def generate_slide(session_id: str, n: int):
+async def generate_slide(session_id: str, n: int, force: bool = False):
     """
     Generate slide N as an SSE stream of HTML tokens.
     n is 1-indexed (matches outline).
@@ -181,7 +204,7 @@ async def generate_slide(session_id: str, n: int):
 
     # Check if slide already exists and is approved or has content
     existing = next((s for s in session.slides if s.index == n), None)
-    if existing and existing.html:
+    if existing and existing.html and not force:
         logger.info(f"[{session_id}] slide {n} already exists, streaming from cache")
         async def cached_stream():
             safe = existing.html.replace("\n", "\\n")
@@ -351,6 +374,21 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
     if not slide_spec:
         raise HTTPException(status_code=404, detail=f"Slide {n} not found")
 
+    from models.session import SlideData
+    slide_data = next((s for s in session.slides if s.index == n), None)
+    if not slide_data:
+        slide_data = SlideData(
+            index=n,
+            title=slide_spec.title,
+            html=req.current_html or "",
+            status="refining"
+        )
+        session.slides.append(slide_data)
+        
+    if req.instruction and req.instruction.strip():
+        slide_data.refinements.append(req.instruction.strip())
+        save_session(session)
+
     MODE_INSTRUCTIONS = {
         "simplify": "Make this slide SIMPLER. Fewer words, fewer elements. Keep only the most essential point.",
         "expand": "Expand this slide. Add more detail, more explanation, or a deeper example.",
@@ -375,10 +413,22 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
         theme=session.theme,
         deck_context=session.deck_context,
         relevant_chunks=relevant,
-    ) + f"\n\n=== REFINEMENT INSTRUCTION ===\n{MODE_INSTRUCTIONS[req.mode]}"
+    )
+
+    if req.current_html:
+        prompt += f"\n\n=== CURRENT SLIDE HTML ===\n{req.current_html}\n"
+
+    if slide_data.refinements:
+        prompt += "\n=== PREVIOUS USER REFINEMENTS (DO NOT REVERT THESE) ===\n"
+        for i, ref in enumerate(slide_data.refinements[:-1] if req.instruction else slide_data.refinements, 1):
+            prompt += f"{i}. {ref}\n"
+
+    prompt += f"\n=== REFINEMENT INSTRUCTION ===\n{MODE_INSTRUCTIONS.get(req.mode, 'Refine the slide.')}"
 
     if req.instruction and req.instruction.strip():
         prompt += f"\nAdditional user instruction: {req.instruction.strip()}"
+
+    prompt += "\n\nCRITICAL: Your task is to modify the provided CURRENT SLIDE HTML. You MUST preserve the existing structural design, layout, background elements (like grids and glows), and ALL Previous User Refinements listed above, unless the current instruction explicitly asks you to change them. Return ONLY the modified HTML block."
 
     logger.info(f"[{session_id}] refining slide {n} mode={req.mode}")
 

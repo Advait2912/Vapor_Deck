@@ -36,9 +36,12 @@ class OllamaProvider(BaseProvider):
                 for m in messages
             ],
             "stream": True,
+            "options": {
+                "num_ctx": 8192  # Adjust this value based on your VRAM. 8192 is safer than 16384.
+            }
         }
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream(
                 "POST", f"{OLLAMA_BASE}/api/chat", json=payload
             ) as resp:
@@ -62,14 +65,23 @@ class OllamaProvider(BaseProvider):
         Requires a vision-capable Ollama model (e.g. llava:13b).
         Falls back to text-only if model doesn't support images.
         """
+        # BUG: gemma4:31b-cloud is text-only and crashes Ollama with 500 if images are sent.
+        # Auto-fallback to ministral for vision if gemma is selected.
+        effective_model = self.model
+        if "gemma4" in self.model:
+            effective_model = "ministral-3:14b-cloud"
+
         payload = {
-            "model": self.model,
+            "model": effective_model,
             "messages": [{
                 "role": "user",
                 "content": prompt,
                 "images": [image_b64],
             }],
             "stream": False,
+            "options": {
+                "num_ctx": 4096  # Adjusted for vision models
+            }
         }
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(f"{OLLAMA_BASE}/api/chat", json=payload)

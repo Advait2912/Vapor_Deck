@@ -7,6 +7,8 @@ including scoped <style> and interactive <script> tags.
 
 SLIDE_SYSTEM = (
     "You are a senior frontend developer generating slides for a web-native presentation. "
+    "The slide is rendered in a FIXED 1280x720 pixel canvas. ALL content must fit within this viewport with NO scrolling — "
+    "every element must be visible without any scroll interaction. Be ruthless about content density: fewer, impactful points beat many verbose ones. "
     "Return ONLY the <section> HTML element — nothing else. "
     "No markdown fences. No explanations. No surrounding HTML boilerplate."
 )
@@ -51,19 +53,32 @@ ONLY CSS custom properties for all colors:
 9. Images: only use CSS backgrounds or SVG — no external image URLs
 10. The slide heading MUST match the title exactly: "{title}"
 
+=== CANVAS CONSTRAINT (CRITICAL — READ CAREFULLY) ===
+The slide renders inside a FIXED 1280x720 pixel browser viewport. This is like a PowerPoint slide — there is NO scrollbar and NO overflow.
+RULES YOU MUST FOLLOW:
+- NEVER set overflow-y: auto, overflow-y: scroll, or overflow: auto on any content container. Content must never need to scroll.
+- NEVER use max-height with overflow on content boxes. Every element must be naturally visible.
+- LIMIT bullet points: maximum 4 per column. If you have more content, reduce it — do NOT list everything.
+- Keep body text SHORT: each bullet point should be one concise sentence, not a paragraph.
+- Font sizes: body text minimum 0.9rem, maximum 1.1rem. Do not go smaller trying to fit more content.
+- If you have two columns, each column should have at most 3-4 items.
+- Headings: clamp(1.5rem, 3vw, 2.5rem). Do not make them larger or they eat into content space.
+- Prefer visual hierarchy and white space over cramming in maximum text.
+- If the content spec has more points than can fit cleanly, SUMMARIZE and MERGE them — never sacrifice readability for completeness.
+
 === INTENT GUIDANCE ===
 {intent_guidance}
 """
 
 INTENT_GUIDANCE = {
-    "title-hero": "Large centered title. Subtitle with 1-2 sentences. Optional decorative element. No bullet points.",
-    "explain-concept": "Clear heading. 2-3 paragraphs or callout boxes explaining the concept. Keep text minimal.",
-    "explain-mechanism": "Step-by-step flow or numbered process. Use a visual diagram in CSS if possible.",
-    "show-example": "Heading + concrete real-world example. Code snippet if relevant. Before/after if applicable.",
-    "compare": "Two-column layout. Left vs Right. Use a table or side-by-side cards.",
-    "list-points": "Heading + 4-6 bullet points. Each bullet is one short statement.",
-    "code-walkthrough": "Code block on left or full width. Annotations or highlights on the key lines.",
-    "summary": "Heading 'Key Takeaways'. 3-5 bullet points. Optional CTA or closing statement.",
+    "title-hero": "Large centered title. Subtitle with 1-2 short sentences. Optional decorative element. NO bullet points.",
+    "explain-concept": "Clear heading. Maximum 2 short paragraphs or 3 callout boxes. Keep each text block to 1-2 sentences.",
+    "explain-mechanism": "Step-by-step flow with maximum 4 steps. Use a visual diagram in CSS if possible. Each step: label + one sentence.",
+    "show-example": "Heading + one concrete example. Code snippet if relevant. Maximum 3 annotations. No long explanations.",
+    "compare": "Two-column layout. Maximum 3 items per column. Each item: bold label + one short sentence.",
+    "list-points": "Heading + MAXIMUM 4 bullet points. Each bullet is ONE short sentence (under 15 words). Prioritize the most impactful points.",
+    "code-walkthrough": "Code block takes 60% of space. Maximum 3 annotation callouts. Keep annotations brief.",
+    "summary": "Heading 'Key Takeaways'. MAXIMUM 4 bullet points. One short sentence each. Optional closing statement.",
 }
 
 

@@ -32,7 +32,7 @@ router = APIRouter()
 
 class CreateSessionRequest(BaseModel):
     text_model: str = "ollama/gemma4:31b-cloud"
-    vision_model: str = "ollama/gemma4:31b-cloud"
+    vision_model: str = "ollama/ministral-3:14b-cloud"
     theme: str = "dark-tech"
 
 
@@ -47,6 +47,9 @@ class DeckSettingsRequest(BaseModel):
     narrative_structure: str | None = None
     deck_instructions: str | None = None
 
+
+class UpdateTitleRequest(BaseModel):
+    title: str
 
 class ReorderRequest(BaseModel):
     """New slide order as a list of current indices (0-based)."""
@@ -158,10 +161,20 @@ async def generate_outline(session_id: str):
 
     try:
         cleaned = strip_fences(raw_outline)
-        outline_data = json.loads(cleaned)
+        if not cleaned.startswith("[") or not cleaned.endswith("]"):
+            # Try to find array within the text if model added chatter
+            start = cleaned.find("[")
+            end = cleaned.rfind("]")
+            if start != -1 and end != -1:
+                cleaned = cleaned[start:end+1]
+        
+        # Sanitize: Keep only printable chars and standard whitespace
+        sanitized = "".join(c for c in cleaned if c.isprintable() or c in "\n\r\t")
+        outline_data = json.loads(sanitized, strict=False)
         session.outline = [OutlineItem(**item) for item in outline_data]
     except Exception as e:
         logger.error(f"[{session_id}] outline parse failed: {e}")
+        logger.debug(f"[{session_id}] raw_outline: {raw_outline[:1000]}")
         raise HTTPException(status_code=500, detail=f"Outline JSON parse failed: {e}")
 
     session.status = "reviewing_outline"
@@ -427,3 +440,17 @@ async def remove_slide_from_outline(session_id: str, n: int):
         "outline": [item.model_dump() for item in session.outline],
         "total_slides": len(session.outline),
     }
+@router.put("/session/{session_id}/outline/{index}/title")
+async def update_slide_title(session_id: str, index: int, req: UpdateTitleRequest):
+    try:
+        session = get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if index < 0 or index >= len(session.outline):
+        raise HTTPException(status_code=404, detail="Slide index out of bounds")
+        
+    session.outline[index].title = req.title
+    save_session(session)
+    logger.info(f"[{session_id}] slide {index} title updated to: {req.title}")
+    return {"status": "ok"}

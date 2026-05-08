@@ -17,12 +17,13 @@ class SlideData(BaseModel):
     index: int
     title: str
     html: str
-    snapshot_b64: str | None = None
+    snapshot_b64: str | None = Field(default=None, exclude=True)
     snapshot_url: str | None = None  # BUG 17: FS-based storage
     audit: dict | None = None  # BUG 3: Persistent VisionAuditResult
     approved: bool = False
     status: str = "draft"  # draft | approved | refining
     metadata: dict = {}    # stores state, planning, etc.
+    refinements: list[str] = Field(default_factory=list) # Persisted list of manual user instructions
 
 
 class DeckSession(BaseModel):
@@ -35,7 +36,7 @@ class DeckSession(BaseModel):
 
     # Model config
     text_model: str = "ollama/gemma4:31b-cloud"
-    vision_model: str = "ollama/gemma4:31b-cloud"
+    vision_model: str = "ollama/ministral-3:14b-cloud"
     theme: str = "dark-tech"
 
     # ── Input layer ────────────────────────────────────────────────────────────

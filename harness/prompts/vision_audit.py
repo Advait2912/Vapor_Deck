@@ -24,32 +24,35 @@ Never loop the regeneration.
 """
 
 VISION_AUDIT_SYSTEM = (
-    "You are a slide layout quality auditor. "
-    "You receive a screenshot of a rendered HTML slide and identify layout problems. "
+    "You are a world-class slide layout quality auditor. "
+    "You receive a screenshot of a rendered HTML presentation slide and identify layout problems. "
+    "When issues exist, you write a precise, developer-facing instruction to fix them. "
     "Return only valid JSON — no markdown, no explanation."
 )
 
-VISION_AUDIT_PROMPT = """You are auditing a rendered slide screenshot.
+VISION_AUDIT_PROMPT = """You are auditing a rendered HTML presentation slide screenshot.
 
 === SLIDE HTML (for reference) ===
 {html_snippet}
 
 === YOUR TASK ===
-Look at the attached screenshot. Identify any of these issues:
+Look at the attached screenshot carefully AND inspect the HTML. Check for these specific issues:
 
-1. OVERFLOW: Any content that extends beyond the slide boundary or is cut off
-2. CLIPPED: Text or elements that are partially visible at the edges
-3. UNREADABLE CODE: Code blocks that are too small, overflow, or have poor contrast
-4. BAD SPACING: Regions that are dramatically over-crowded OR nearly empty
-5. EMPTY REGIONS: Multi-column layout where one column has very little content
-6. CONTRAST: Text that is hard to read against the background color
-7. WRAPPING: Headings or key text that wraps in an awkward / unintended way
+1. OVERFLOW / SCROLLABLE BOXES (CRITICAL): Look at the HTML for any element with `overflow-y: auto`, `overflow-y: scroll`, or `overflow: auto`. If found, this is ALWAYS a "fixable" issue — content must never require scrolling on a slide. Also check if any content boxes appear clipped or cut off at the bottom of the slide.
+2. CLIPPED: Text or elements partially cut off at the slide's outer edges
+3. TOO MUCH CONTENT: If a column or section has more than 4 bullet points, or if bullet text is paragraph-length (more than ~15 words per point), report it as "fixable".
+4. UNREADABLE CODE: Code blocks that are too small, overflow, or have poor contrast
+5. BAD SPACE UTILIZATION: Content that is too small and "lost" in empty space, OR areas that are severely cramped
+6. FONT SIZE: Body text that is too small to comfortably read from a distance
+7. VISUAL BALANCE: Elements misaligned, off-center without purpose, or a lopsided layout
+8. CONTRAST: Text that is hard to read against the background
+9. WRAPPING: Headings or key labels wrapping awkwardly mid-word or splitting unevenly
 
-Return ONLY this JSON:
+Return ONLY this JSON (no extra text):
 {{
   "verdict": "good" | "fixable" | "regenerate",
-  "visual_issues": ["list of specific problems found, or empty array if none"],
-  "fix_instructions": "string with specific CSS/HTML changes to fix issues, or null if good",
+  "visual_issues": ["concise list of specific problems found, or empty array"],
+  "refine_prompt": "A single, specific instruction for a developer to fix the issues. Start with 'Fix:'. Be concrete — mention element names, CSS properties, and values where possible. Example: 'Fix: The right column text is wrapping at narrow widths. Set min-width: 300px on .right-col and reduce font-size from 1.1rem to 0.95rem.' Set to null if verdict is good.",
   "has_overflow": false,
   "has_clipped_content": false,
   "has_unreadable_code": false,
@@ -60,16 +63,15 @@ Return ONLY this JSON:
 }}
 
 VERDICT RULES:
-- "good": No significant issues. Slide looks clean and professional.
-- "fixable": 1-2 minor issues that can be fixed with small CSS tweaks. Provide fix_instructions.
-- "regenerate": Major structural problems (overflow, clipping, broken layout). Better to regenerate.
+- "good": No significant issues. Slide is clean, professional, and fills the space elegantly.
+- "fixable": 1-3 minor issues (spacing, font size, alignment, wrapping) that can be fixed with targeted CSS tweaks.
+- "regenerate": Major structural failures: severe overflow, entire layout broken, content completely illegible, or more than 60%% of slide space is wasted.
 
-CRITICAL: Be extremely strict about OVERFLOW. If ANY text is cut off or extends beyond the visible slide boundaries, you MUST return "regenerate".
+CRITICAL: Be CONSERVATIVE about "regenerate" — only use it for truly broken layouts. Minor issues should be "fixable". A slide with two columns where one has slightly more content than the other is "good".
 """
 
 
 def build_vision_audit_prompt(html: str) -> str:
     """Build the vision audit prompt with the slide HTML snippet."""
-    # BUG 7: Increased context for large slides
-    html_snippet = html[:5000] if len(html) > 5000 else html
+    html_snippet = html[:6000] if len(html) > 6000 else html
     return VISION_AUDIT_PROMPT.format(html_snippet=html_snippet)

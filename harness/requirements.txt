@@ -10,5 +10,3 @@ python-docx
 Pillow
 beautifulsoup4
 aiofiles
-playwright
-

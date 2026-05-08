@@ -2,7 +2,6 @@
  * UI Management and Rendering
  */
 import { state } from './state.js';
-import { getSlidePhase, canPlanSlide } from './state.js';
 
 // DOM Elements
 export const elements = {
@@ -12,7 +11,6 @@ export const elements = {
   slideIframe: document.getElementById('slide-iframe'),
   themeSelect: document.getElementById('theme-select'),
   modelSelect: document.getElementById('model-select'),
-  approveBtn: document.getElementById('approve-btn'),
   customRegenBtn: document.getElementById('custom-regen-btn'),
   stopBtn: document.getElementById('stop-btn'),
   regenBtn: document.getElementById('regen-btn'),
@@ -44,8 +42,9 @@ export const elements = {
   planInteraction: document.getElementById('plan-interaction'),
   chatHistory: document.getElementById('chat-history'),
   buildInteraction: document.getElementById('build-interaction'),
-  planModeBtn: document.getElementById('plan-mode-btn'),
-  buildModeBtn: document.getElementById('build-mode-btn')
+  // Mode pill buttons
+  modePillPlan: document.getElementById('interaction-mode-plan'),
+  modePillBuild: document.getElementById('interaction-mode-build'),
 };
 
 /**
@@ -54,14 +53,14 @@ export const elements = {
 export function updateUI() {
   const status = state.status.toUpperCase();
   elements.statusText.textContent = status;
-  elements.slideProgress.textContent = state.outline.length
+  elements.slideProgress.textContent = (state.outline && state.outline.length)
     ? `Slide ${state.currentIndex + 1} / ${state.outline.length}`
     : 'Slide 0 / 0';
   
   const dot = document.querySelector('.status-dot');
   if (!dot) return;
 
-  const busyStatuses = ['GENERATING', 'OUTLINING', 'SYNTHESIZING', 'INITIALIZING', 'CONFIRMING', 'APPROVING'];
+  const busyStatuses = ['GENERATING', 'OUTLINING', 'SYNTHESIZING', 'INITIALIZING', 'CONFIRMING'];
   if (busyStatuses.includes(status)) {
     dot.style.background = '#fbbf24';
     dot.style.boxShadow = '0 0 8px #fbbf24';
@@ -73,26 +72,16 @@ export function updateUI() {
     dot.style.boxShadow = '0 0 8px #10b981';
   }
 
-  // ── Per-slide phase awareness ──────────────────────────────────────────────
+  // ── Mode-based visibility ──────────────────────────────────────────────────
   const isPlan = state.mode === 'plan';
-  const currentSlideInBuild = !canPlanSlide(state.currentIndex);
 
-  // If current slide is in build phase, force build interaction even if toggle says plan
-  const showBuildInteraction = !isPlan || currentSlideInBuild;
+  elements.planInteraction.style.display = isPlan ? 'flex' : 'none';
+  elements.buildInteraction.style.display = isPlan ? 'none' : 'flex';
 
-  elements.planInteraction.style.display = showBuildInteraction ? 'none' : 'flex';
-  elements.buildInteraction.style.display = showBuildInteraction ? 'flex' : 'none';
-
-  if (elements.planModeBtn) {
-    elements.planModeBtn.classList.toggle('active', isPlan && !currentSlideInBuild);
-    // Dim the plan button if current slide can't be planned
-    elements.planModeBtn.style.opacity = currentSlideInBuild ? '0.4' : '1';
-    elements.planModeBtn.title = currentSlideInBuild
-      ? `Slide ${state.currentIndex + 1} has been built — planning locked`
-      : 'Switch to Plan mode';
-  }
-  if (elements.buildModeBtn) {
-    elements.buildModeBtn.classList.toggle('active', showBuildInteraction);
+  // Update mode pill active state
+  if (elements.modePillPlan && elements.modePillBuild) {
+    elements.modePillPlan.classList.toggle('active', isPlan);
+    elements.modePillBuild.classList.toggle('active', !isPlan);
   }
 
   // Status-based visibility
@@ -111,15 +100,15 @@ export function updateUI() {
   }
 
   // Generate Button label in Plan Mode
-  if (!showBuildInteraction) {
+  if (isPlan) {
     elements.promptInput.disabled = false;
     if (status === 'IDLE') {
-      elements.generateBtn.textContent = 'Generate Deck';
+      elements.generateBtn.textContent = 'Generate Outline';
       elements.generateBtn.disabled = false;
     } else if (status === 'REVIEWING_OUTLINE' || status === 'GENERATING' || status === 'DONE' || status === 'REVIEWING') {
       elements.generateBtn.textContent = 'Send Message';
       elements.generateBtn.disabled = false;
-    } else if (['SYNTHESIZING', 'OUTLINING'].includes(status)) {
+    } else if (['SYNTHESIZING', 'OUTLINING', 'PLANNING'].includes(status)) {
       elements.generateBtn.textContent = 'Working...';
       elements.generateBtn.disabled = true;
       elements.promptInput.disabled = true;
@@ -213,55 +202,63 @@ export function renderChatMessage(role, text) {
 
 /**
  * Render the slide outline in the sidebar.
- * Shows per-slide phase badges: PLAN (purple) or BUILD (blue) with lock icon for built slides.
+ * @param {Function|null} onItemClick  - called with index when a slide row is clicked
+ * @param {Function|null} onReorder    - called with (fromIndex, toIndex) on drag-drop
+ * @param {boolean}       isReorderMode - when true, adds drag handles + drag events
  */
-export function renderOutline(onItemClick = null) {
-  if (!state.outline.length) {
+export function renderOutline(onItemClick = null, onReorder = null, isReorderMode = false) {
+  if (!state.outline || !state.outline.length) {
     elements.outlineList.innerHTML = `<div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">No outline generated yet. Submit a topic to begin.</div>`;
     return;
   }
   elements.outlineList.innerHTML = state.outline.map((item, index) => {
-    const isActive = index === state.currentIndex;
-    const isApproved = state.slides.some(s => s.index === index);
-    const isDraft = !!state.draftSlides[index];
+    const isActive    = index === state.currentIndex;
+    const isApproved  = state.slides.some(s => s.index === index);
+    const isDraft     = !!state.draftSlides[index];
     const isGenerating = !!state.generatingSlides[index];
-    const slidePhase = getSlidePhase(index); // 'plan' | 'build'
-    const isBuilt = slidePhase === 'build';
 
     let badge;
-    if (isApproved)       badge = '✓';
-    else if (index + 1 < 10) badge = `0${index + 1}`;
-    else                  badge = `${index + 1}`;
+    if (index + 1 < 10) badge = `0${index + 1}`;
+    else                 badge = `${index + 1}`;
 
     const bgColor   = isActive ? 'rgba(59,130,246,0.12)' : 'transparent';
     const textColor = isActive ? 'var(--text-main)' : 'var(--text-muted)';
     const numColor  = isActive ? 'var(--accent)' : isApproved ? '#10b981' : 'var(--text-muted)';
     const weight    = isActive ? '600' : '400';
-    const cursor    = (isApproved || onItemClick) ? 'pointer' : 'default';
+    const cursor    = isReorderMode ? 'grab' : (isApproved || onItemClick) ? 'pointer' : 'default';
 
-    // Phase pill: shows current phase of this specific slide
-    const phasePill = isBuilt
-      ? `<span style="font-size: 0.55rem; padding: 1px 5px; border-radius: 3px; background: rgba(59,130,246,0.2); color: #60a5fa; font-weight: 700; letter-spacing: 0.05em; margin-right: 4px;" title="This slide is in Build phase — planning locked">BUILD</span>`
-      : (state.outline.length > 0 && state.status !== 'IDLE' && state.status !== 'REVIEWING_OUTLINE')
-        ? `<span style="font-size: 0.55rem; padding: 1px 5px; border-radius: 3px; background: rgba(139,92,246,0.2); color: #a78bfa; font-weight: 700; letter-spacing: 0.05em; margin-right: 4px;" title="This slide is in Plan phase">PLAN</span>`
-        : '';
+    const phasePill = ''; // Removed to keep UI cleaner
 
-    const genBtnHtml = isApproved 
-      ? `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`
-      : isGenerating 
-        ? `<div class="loading-spinner-tiny"></div>`
-        : `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
+    const genBtnHtml = isReorderMode
+      ? '' // no gen buttons in reorder mode
+      : isApproved
+        ? `<button class="gen-slide-btn secondary" data-index="${index}" title="Regenerate Slide">↻</button>`
+        : isGenerating
+          ? `<div class="loading-spinner-tiny"></div>`
+          : `<button class="gen-slide-btn primary" data-index="${index}" title="Build Slide">✧</button>`;
+
+    // Drag handle — only visible in reorder mode
+    const dragHandle = isReorderMode
+      ? `<span class="drag-handle" title="Drag to reorder">⠿</span>`
+      : '';
+
+    const hasContent = isApproved || isDraft;
 
     return `
-      <div class="outline-item ${isActive ? 'active' : ''} ${isApproved ? 'approved' : ''} ${isBuilt ? 'slide-built' : 'slide-plan'}"
+      <div class="outline-item ${isActive ? 'active' : ''} ${isApproved ? 'approved' : ''} ${hasContent ? 'slide-built' : 'slide-plan'} ${isReorderMode ? 'reorder-mode' : ''}"
            data-index="${index}"
-           style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); 
+           ${isReorderMode ? 'draggable="true"' : ''}
+           style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03);
                   font-size: 0.85rem; cursor: ${cursor}; display: flex; align-items: center; gap: 10px;
                   background: ${bgColor}; transition: all 0.2s ease;
-                  border-left: 2px solid ${isBuilt ? 'rgba(59,130,246,0.4)' : 'rgba(139,92,246,0.3)'};">
+                  border-left: 2px solid ${hasContent ? 'rgba(59,130,246,0.4)' : 'rgba(139,92,246,0.3)'};">
+        ${dragHandle}
         <span style="color: ${numColor}; font-family: var(--font-mono); min-width: 20px; font-size: 0.7rem; opacity: 0.8;">${badge}</span>
         <div style="flex: 1; min-width: 0;">
-          <div style="color: ${textColor}; font-weight: ${weight}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.01em;">${item.title}</div>
+          <div class="outline-item-title" 
+               style="color: ${textColor}; font-weight: ${weight}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.01em;">
+            ${item.title}
+          </div>
           <div style="margin-top: 2px;">${phasePill}</div>
         </div>
         <div class="outline-item-actions" style="display: flex; align-items: center; opacity: ${isActive ? '1' : '0.6'}; transition: opacity 0.2s; flex-shrink: 0;">
@@ -271,9 +268,10 @@ export function renderOutline(onItemClick = null) {
     `;
   }).join('');
 
-  // Wire up clicks
+  // Wire up click navigation
   elements.outlineList.querySelectorAll('.outline-item').forEach(el => {
     el.addEventListener('click', (e) => {
+      if (isReorderMode) return; // clicks disabled in reorder mode
       if (e.target.closest('.gen-slide-btn')) return;
       const idx = parseInt(el.dataset.index);
       if (onItemClick) onItemClick(idx);
@@ -288,7 +286,84 @@ export function renderOutline(onItemClick = null) {
       window.dispatchEvent(new CustomEvent('generate-slide', { detail: { index: idx } }));
     });
   });
+
+
+  // ── Drag-and-Drop (reorder mode only) ────────────────────────────────────────
+  if (!isReorderMode || !onReorder) return;
+
+  let dragFromIndex = null;
+  let dragOverIndex = null;
+
+  const items = elements.outlineList.querySelectorAll('.outline-item[draggable]');
+  items.forEach(el => {
+    el.addEventListener('dragstart', (e) => {
+      dragFromIndex = parseInt(el.dataset.index);
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      // Required for Firefox
+      e.dataTransfer.setData('text/plain', dragFromIndex);
+    });
+
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      // Clean up all drop indicators
+      elements.outlineList.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(t => {
+        t.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+      dragFromIndex = null;
+      dragOverIndex = null;
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      const toIndex = parseInt(el.dataset.index);
+      if (toIndex === dragFromIndex) return;
+
+      // Determine if drop is in top or bottom half
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const isTopHalf = e.clientY < midY;
+
+      // Clear others
+      elements.outlineList.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(t => {
+        if (t !== el) {
+          t.classList.remove('drag-over-top', 'drag-over-bottom');
+        }
+      });
+
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+      el.classList.add(isTopHalf ? 'drag-over-top' : 'drag-over-bottom');
+      dragOverIndex = isTopHalf ? toIndex : toIndex + 1;
+    });
+
+    el.addEventListener('dragleave', (e) => {
+      // Only clear if leaving to outside the outline list
+      if (!el.contains(e.relatedTarget)) {
+        el.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+
+      const from = dragFromIndex;
+      if (from === null || dragOverIndex === null) return;
+
+      let to = dragOverIndex;
+      // Adjust target index when moving down (because splice removes the element first)
+      if (to > from) to -= 1;
+      to = Math.max(0, Math.min(to, state.outline.length - 1));
+
+      if (from !== to) {
+        onReorder(from, to);
+      }
+    });
+  });
 }
+
 
 /**
  * Render a placeholder in an iframe
@@ -338,36 +413,17 @@ export function renderSlide(html, targetIframe = elements.slideIframe) {
       overflow: hidden;
       background: #000;
     }
-    #slide-scaler {
-      transform-origin: top left;
-    }
+
   </style>
 </head>
 <body>
-  <div id="slide-scaler">${html}</div>
+  <div id="slide-container" style="width: 100%; height: 100%;">
+    ${html}
+  </div>
   <script>
-    function fitSlide() {
-      const scaler = document.getElementById('slide-scaler');
-      if (!scaler) return;
-      const slide = scaler.firstElementChild;
-      if (!slide) return;
-      const naturalW = slide.scrollWidth  || slide.offsetWidth  || 1280;
-      const naturalH = slide.scrollHeight || slide.offsetHeight || 720;
-      const scaleX = window.innerWidth  / naturalW;
-      const scaleY = window.innerHeight / naturalH;
-      const scale  = Math.min(scaleX, scaleY);
-      scaler.style.transform = 'scale(' + scale + ')';
-      const scaledW = naturalW * scale;
-      const scaledH = naturalH * scale;
-      scaler.style.marginLeft = ((window.innerWidth  - scaledW) / 2) + 'px';
-      scaler.style.marginTop  = ((window.innerHeight - scaledH) / 2) + 'px';
-    }
-    window.addEventListener('load', fitSlide);
-    window.addEventListener('resize', fitSlide);
-    if (document.readyState === 'complete') fitSlide();
     setTimeout(() => {
       document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
-      fitSlide();
+      window.parent.scaleIframe(); // Trigger parent scaler once layout stabilizes
     }, 80);
   </script>
 </body>
@@ -382,14 +438,12 @@ export function renderSlideInfo(index) {
     return;
   }
 
-  const slidePhase = getSlidePhase(index);
-  const phaseLabel = slidePhase === 'build'
-    ? `<span style="color: #60a5fa; font-size: 0.7rem; font-weight: 700;">BUILD PHASE</span>`
-    : `<span style="color: #a78bfa; font-size: 0.7rem; font-weight: 700;">PLAN PHASE</span>`;
+  const isApproved  = state.slides.some(s => s.index === index);
+  const isDraft     = !!state.draftSlides[index];
 
   elements.infoList.innerHTML = `
     <div class="fade-in">
-      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Slide ${index + 1} · ${phaseLabel}</div>
+      <div style="font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Slide ${index + 1}</div>
       <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: #fff;">${item.title}</h3>
       
       <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -410,12 +464,12 @@ export function renderSlideInfo(index) {
           </ul>
         </div>
 
-        ${slidePhase === 'build' ? `
+        ${(isApproved || isDraft) ? `
         <div style="padding: 10px 12px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.75rem; color: #93c5fd;">
-          ⚙ This slide is in Build phase. Use the refine input or regen to update it.
+          ⚙ This slide has been built. Switch to Build mode to refine it.
         </div>` : `
         <div style="padding: 10px 12px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 4px; font-size: 0.75rem; color: #c4b5fd;">
-          ✏ This slide is in Plan phase. Chat to refine the outline, or click ✧ to build it.
+          ✏ This slide is in the outline. Chat to refine the outline, or click ✧ to build it.
         </div>`}
       </div>
     </div>
@@ -423,7 +477,7 @@ export function renderSlideInfo(index) {
 }
 
 export function renderOutlineContentSummary(target = null) {
-  const rows = state.outline.map((item, idx) => `
+  const rows = (state.outline || []).map((item, idx) => `
     <div style="padding: 12px; border-bottom: 1px solid #222; background: ${idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'}">
       <div style="font-weight: 600; color: #fff; font-size: 0.9rem;">${idx + 1}. ${item.title}</div>
       <div style="color:#60a5fa; margin-top:4px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">${item.intent}</div>
@@ -504,3 +558,26 @@ export function clearUI() {
   
   updateUI();
 }
+
+/**
+ * Externally scale the 1280x720 iframe to fit the preview container
+ */
+export function scaleIframe() {
+  const container = document.getElementById('preview-container');
+  const iframe = document.getElementById('slide-iframe');
+  if (!container || !iframe) return;
+
+  const padding = 40; // 20px padding on each side
+  const availableW = container.clientWidth - padding;
+  const availableH = container.clientHeight - padding;
+
+  const scale = Math.min(availableW / 1280, availableH / 720);
+  iframe.style.transform = `scale(${scale})`;
+}
+
+// Make globally accessible for the iframe script to call
+window.scaleIframe = scaleIframe;
+
+window.addEventListener('resize', scaleIframe);
+// Initial scale
+requestAnimationFrame(scaleIframe);

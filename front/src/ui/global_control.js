@@ -2,29 +2,21 @@
  * GLOBAL CONTROL SYSTEM
  * ─────────────────────
  * Handles deck-wide orchestration:
- *   - Add/remove slides
- *   - Reorder slides
- *   - Change deck tone / audience / theme
- *   - Modify narrative structure
+ *   - Add slides (with inline title + description form)
+ *   - Remove slides
+ *   - Reorder slides (HTML5 drag-and-drop)
+ *   - Global deck instructions
  *
  * KEY DESIGN DECISION:
  *   Global controls modify outline state and deck_context,
  *   but NEVER invalidate already-approved (build-phase) slides.
  *   Approved slides are frozen until explicitly regenerated.
- *
- * Architectural note:
- *   This is a SEPARATE layer from localControls.js (per-slide).
- *   Global → deck metadata.  Local → single slide content.
  */
 
 import { state, updateState } from '../state.js';
-import { renderOutline } from './outline.js';
 
-// ── State for global deck settings ────────────────────────────────────────────
+// ── State for global deck settings (instructions only — tone/audience removed) ─────
 export const globalState = {
-  tone: 'professional',
-  audience: 'general',
-  narrativeStructure: 'linear', // linear | problem-solution | before-after | listicle
   deckInstructions: '',
 };
 
@@ -34,64 +26,20 @@ export function renderGlobalControls(container) {
 
   container.innerHTML = `
     <div class="global-controls" style="
-      display: flex; flex-direction: column; gap: 8px;
-      padding: 12px; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
       background: var(--bg-panel);
     ">
-      <div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 4px;">
-        Deck Settings
+      <div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 2px;">
+        Deck Actions
       </div>
 
-      <!-- Tone -->
-      <div class="control-row" style="display: flex; align-items: center; gap: 8px;">
-        <label style="font-size: 0.75rem; color: var(--text-muted); min-width: 60px;">Tone</label>
-        <select id="global-tone" class="global-select" style="
-          flex: 1; background: var(--bg-input); border: 1px solid var(--border);
-          color: var(--text-main); padding: 3px 6px; border-radius: 3px; font-size: 0.75rem;
-        ">
-          <option value="professional">Professional</option>
-          <option value="technical">Technical</option>
-          <option value="casual">Casual</option>
-          <option value="executive">Executive</option>
-          <option value="educational">Educational</option>
-        </select>
-      </div>
-
-      <!-- Audience -->
-      <div class="control-row" style="display: flex; align-items: center; gap: 8px;">
-        <label style="font-size: 0.75rem; color: var(--text-muted); min-width: 60px;">Audience</label>
-        <select id="global-audience" class="global-select" style="
-          flex: 1; background: var(--bg-input); border: 1px solid var(--border);
-          color: var(--text-main); padding: 3px 6px; border-radius: 3px; font-size: 0.75rem;
-        ">
-          <option value="general">General</option>
-          <option value="developers">Developers</option>
-          <option value="executives">Executives</option>
-          <option value="designers">Designers</option>
-          <option value="students">Students</option>
-        </select>
-      </div>
-
-      <!-- Narrative Structure -->
-      <div class="control-row" style="display: flex; align-items: center; gap: 8px;">
-        <label style="font-size: 0.75rem; color: var(--text-muted); min-width: 60px;">Structure</label>
-        <select id="global-narrative" class="global-select" style="
-          flex: 1; background: var(--bg-input); border: 1px solid var(--border);
-          color: var(--text-main); padding: 3px 6px; border-radius: 3px; font-size: 0.75rem;
-        ">
-          <option value="linear">Linear</option>
-          <option value="problem-solution">Problem → Solution</option>
-          <option value="before-after">Before → After</option>
-          <option value="listicle">Top N List</option>
-        </select>
-      </div>
-
-      <!-- Action Buttons -->
-      <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+      <!-- Action Buttons Row -->
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <button id="add-slide-btn" class="global-btn" title="Add a new slide to the deck">
           + Add Slide
         </button>
-        <button id="reorder-slides-btn" class="global-btn" title="Drag to reorder slides">
+        <button id="reorder-slides-btn" class="global-btn" title="Drag slides to reorder">
           ⇅ Reorder
         </button>
         <button id="deck-instructions-btn" class="global-btn" title="Add global instructions for all slides">
@@ -99,30 +47,71 @@ export function renderGlobalControls(container) {
         </button>
       </div>
 
-      <!-- Deck Instructions Textarea (hidden by default) -->
-      <div id="deck-instructions-panel" style="display: none; margin-top: 4px;">
+      <!-- Inline Add Slide Panel (hidden by default) -->
+      <div id="add-slide-panel" style="
+        display: none; flex-direction: column; gap: 6px;
+        padding: 10px; margin-top: 2px;
+        background: var(--bg-input); border: 1px solid var(--border);
+        border-radius: 4px; animation: slideDown 0.15s ease;
+      ">
+        <div style="font-size: 0.7rem; color: var(--accent); font-weight: 600; letter-spacing: 0.04em;">
+          New Slide
+        </div>
+        <input
+          id="new-slide-title"
+          type="text"
+          placeholder="Title (e.g. Market Opportunity)"
+          maxlength="80"
+          style="
+            width: 100%; background: var(--bg-dark); border: 1px solid var(--border);
+            color: var(--text-main); padding: 6px 8px; border-radius: 3px;
+            font-size: 0.8rem; font-family: inherit; outline: none;
+          "
+        />
+        <textarea
+          id="new-slide-desc"
+          placeholder="What should this slide cover? (2-3 key points, used as slide intent)"
+          rows="2"
+          style="
+            width: 100%; background: var(--bg-dark); border: 1px solid var(--border);
+            color: var(--text-main); padding: 6px 8px; border-radius: 3px;
+            font-size: 0.8rem; font-family: inherit; resize: none; outline: none;
+          "
+        ></textarea>
+        <div style="display: flex; gap: 6px;">
+          <button id="confirm-add-slide-btn" class="global-btn primary-small" style="flex: 1;">+ Add Slide</button>
+          <button id="cancel-add-slide-btn" class="global-btn">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Reorder Mode Banner (shown when active) -->
+      <div id="reorder-mode-panel" style="display: none; margin-top: 2px;">
+        <div style="
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 6px 8px; background: rgba(59,130,246,0.1);
+          border: 1px solid rgba(59,130,246,0.25); border-radius: 3px;
+        ">
+          <span style="font-size: 0.7rem; color: #60a5fa;">⠿ Drag slides to reorder</span>
+          <button id="done-reorder-btn" class="global-btn primary-small" style="padding: 2px 8px;">✓ Done</button>
+        </div>
+      </div>
+
+      <!-- Deck Instructions Panel (hidden by default) -->
+      <div id="deck-instructions-panel" style="display: none; margin-top: 2px;">
         <textarea
           id="deck-instructions-input"
-          placeholder="Global deck instructions (e.g. 'Use dark humor', 'Include code examples'...)"
+          placeholder="Global deck instructions (e.g. 'Include code examples', 'Use dark humor'...)"
           style="
-            width: 100%; min-height: 60px; background: var(--bg-input);
+            width: 100%; min-height: 56px; background: var(--bg-input);
             border: 1px solid var(--border); color: var(--text-main);
             padding: 8px; border-radius: 3px; font-size: 0.75rem;
-            font-family: inherit; resize: vertical;
+            font-family: inherit; resize: vertical; outline: none;
           "
         ></textarea>
         <div style="display: flex; gap: 6px; margin-top: 4px;">
           <button id="apply-instructions-btn" class="global-btn primary-small">Apply</button>
           <button id="cancel-instructions-btn" class="global-btn">Cancel</button>
         </div>
-      </div>
-
-      <!-- Reorder Mode (shown when active) -->
-      <div id="reorder-mode-panel" style="display: none; margin-top: 4px;">
-        <div style="font-size: 0.7rem; color: var(--accent); margin-bottom: 6px;">
-          Drag slides to reorder. Click Done when finished.
-        </div>
-        <button id="done-reorder-btn" class="global-btn primary-small">✓ Done Reordering</button>
       </div>
     </div>
 
@@ -131,11 +120,12 @@ export function renderGlobalControls(container) {
         background: var(--bg-input);
         border: 1px solid var(--border);
         color: var(--text-muted);
-        padding: 3px 8px;
+        padding: 4px 10px;
         border-radius: 3px;
         cursor: pointer;
         font-size: 0.7rem;
         transition: all 0.15s;
+        white-space: nowrap;
       }
       .global-btn:hover {
         border-color: var(--accent);
@@ -146,126 +136,183 @@ export function renderGlobalControls(container) {
         border-color: var(--accent);
         color: white;
       }
-      .global-select:focus {
-        outline: none;
+      .global-btn.primary-small:hover {
+        filter: brightness(1.1);
+      }
+      .global-btn.active-mode {
         border-color: var(--accent);
+        color: var(--accent);
+      }
+      #new-slide-title:focus,
+      #new-slide-desc:focus,
+      #deck-instructions-input:focus {
+        border-color: var(--accent);
+      }
+      @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
     </style>
   `;
 
-  // Restore saved values
-  const toneEl = container.querySelector('#global-tone');
-  const audienceEl = container.querySelector('#global-audience');
-  const narrativeEl = container.querySelector('#global-narrative');
-
-  if (toneEl) toneEl.value = globalState.tone;
-  if (audienceEl) audienceEl.value = globalState.audience;
-  if (narrativeEl) narrativeEl.value = globalState.narrativeStructure;
+  // Restore instructions if set
+  const instrInput = container.querySelector('#deck-instructions-input');
+  if (instrInput && globalState.deckInstructions) {
+    instrInput.value = globalState.deckInstructions;
+  }
 
   _bindGlobalControlEvents(container);
 }
 
 // ── Event binding ──────────────────────────────────────────────────────────────
 function _bindGlobalControlEvents(container) {
-  // Tone change
-  const toneEl = container.querySelector('#global-tone');
-  toneEl?.addEventListener('change', (e) => {
-    globalState.tone = e.target.value;
-    _emitGlobalChange('tone', e.target.value);
+  // ── Add Slide — open/close the inline form ───────────────────────────────────
+  const addBtn       = container.querySelector('#add-slide-btn');
+  const addPanel     = container.querySelector('#add-slide-panel');
+  const titleInput   = container.querySelector('#new-slide-title');
+  const descInput    = container.querySelector('#new-slide-desc');
+  const confirmBtn   = container.querySelector('#confirm-add-slide-btn');
+  const cancelAddBtn = container.querySelector('#cancel-add-slide-btn');
+
+  addBtn?.addEventListener('click', () => {
+    const isOpen = addPanel.style.display !== 'none';
+    addPanel.style.display = isOpen ? 'none' : 'flex';
+    if (!isOpen) {
+      titleInput?.focus();
+    }
   });
 
-  // Audience change
-  const audienceEl = container.querySelector('#global-audience');
-  audienceEl?.addEventListener('change', (e) => {
-    globalState.audience = e.target.value;
-    _emitGlobalChange('audience', e.target.value);
+  cancelAddBtn?.addEventListener('click', () => {
+    addPanel.style.display = 'none';
+    if (titleInput) titleInput.value = '';
+    if (descInput) descInput.value = '';
   });
 
-  // Narrative structure change
-  const narrativeEl = container.querySelector('#global-narrative');
-  narrativeEl?.addEventListener('change', (e) => {
-    globalState.narrativeStructure = e.target.value;
-    _emitGlobalChange('narrativeStructure', e.target.value);
+  // Confirm add via AI
+  confirmBtn?.addEventListener('click', () => {
+    const title = titleInput?.value?.trim();
+    const description = descInput?.value?.trim();
+    if (!title) {
+      titleInput?.focus();
+      titleInput?.classList.add('input-error');
+      setTimeout(() => titleInput?.classList.remove('input-error'), 800);
+      return;
+    }
+    
+    // Trigger AI-powered addition
+    window.dispatchEvent(new CustomEvent('global:add-slide-ai', { 
+      detail: { title, description } 
+    }));
+
+    // Reset and hide
+    addPanel.style.display = 'none';
+    if (titleInput) titleInput.value = '';
+    if (descInput) descInput.value = '';
   });
 
-  // Add slide
-  container.querySelector('#add-slide-btn')?.addEventListener('click', () => {
-    addSlideToOutline();
+  titleInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); descInput?.focus(); }
+    if (e.key === 'Escape') { cancelAddBtn?.click(); }
+  });
+  descInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); confirmBtn?.click(); }
+    if (e.key === 'Escape') { cancelAddBtn?.click(); }
   });
 
-  // Reorder toggle
-  const reorderBtn = container.querySelector('#reorder-slides-btn');
+  // ── Reorder Mode toggle ──────────────────────────────────────────────────────
+  const reorderBtn   = container.querySelector('#reorder-slides-btn');
   const reorderPanel = container.querySelector('#reorder-mode-panel');
+  const doneBtn      = container.querySelector('#done-reorder-btn');
+
   reorderBtn?.addEventListener('click', () => {
-    const isActive = reorderPanel.style.display !== 'none';
-    reorderPanel.style.display = isActive ? 'none' : 'block';
-    reorderBtn.style.borderColor = isActive ? '' : 'var(--accent)';
-    window.dispatchEvent(new CustomEvent('global:reorder-mode', { detail: { active: !isActive } }));
+    const nowActive = !state.isReorderMode;
+    updateState({ isReorderMode: nowActive });
+    reorderPanel.style.display = nowActive ? 'block' : 'none';
+    reorderBtn.classList.toggle('active-mode', nowActive);
+    window.dispatchEvent(new CustomEvent('global:reorder-mode', { detail: { active: nowActive } }));
   });
 
-  container.querySelector('#done-reorder-btn')?.addEventListener('click', () => {
+  doneBtn?.addEventListener('click', () => {
+    updateState({ isReorderMode: false });
     reorderPanel.style.display = 'none';
-    reorderBtn.style.borderColor = '';
+    reorderBtn?.classList.remove('active-mode');
     window.dispatchEvent(new CustomEvent('global:reorder-mode', { detail: { active: false } }));
   });
 
-  // Instructions toggle
-  const instructionsBtn = container.querySelector('#deck-instructions-btn');
-  const instructionsPanel = container.querySelector('#deck-instructions-panel');
-  instructionsBtn?.addEventListener('click', () => {
-    const isVisible = instructionsPanel.style.display !== 'none';
-    instructionsPanel.style.display = isVisible ? 'none' : 'block';
+  // ── Deck Instructions ────────────────────────────────────────────────────────
+  const instrBtn    = container.querySelector('#deck-instructions-btn');
+  const instrPanel  = container.querySelector('#deck-instructions-panel');
+  const applyBtn    = container.querySelector('#apply-instructions-btn');
+  const cancelInstr = container.querySelector('#cancel-instructions-btn');
+
+  instrBtn?.addEventListener('click', () => {
+    const isVisible = instrPanel.style.display !== 'none';
+    instrPanel.style.display = isVisible ? 'none' : 'block';
   });
 
-  container.querySelector('#apply-instructions-btn')?.addEventListener('click', () => {
-    const text = container.querySelector('#deck-instructions-input')?.value?.trim();
+  applyBtn?.addEventListener('click', () => {
+    const instrInput = container.querySelector('#deck-instructions-input');
+    const text = instrInput?.value?.trim();
     if (text) {
       globalState.deckInstructions = text;
-      _emitGlobalChange('deckInstructions', text);
+      window.dispatchEvent(new CustomEvent('global:setting-changed', {
+        detail: { field: 'deckInstructions', value: text, globalState: { ...globalState } }
+      }));
     }
-    instructionsPanel.style.display = 'none';
+    instrPanel.style.display = 'none';
   });
 
-  container.querySelector('#cancel-instructions-btn')?.addEventListener('click', () => {
-    instructionsPanel.style.display = 'none';
+  cancelInstr?.addEventListener('click', () => {
+    instrPanel.style.display = 'none';
   });
 }
 
 // ── Add Slide ─────────────────────────────────────────────────────────────────
-export function addSlideToOutline() {
+/**
+ * Add a new slide to the outline.
+ * @param {{ title: string, description?: string }} opts
+ */
+export function addSlideToOutline({ title = 'New Slide', description = '' } = {}) {
   if (!state.outline.length) return;
 
-  const newIndex = state.outline.length + 1;
+  const newIndex = state.outline.length; // 0-based index for state
+  // Parse description into key_points (split on ., ;, or newline)
+  const rawPoints = description
+    ? description.split(/[.;\n]+/).map(s => s.trim()).filter(Boolean).slice(0, 4)
+    : ['Key point 1', 'Key point 2'];
+  const keyPoints = rawPoints.length ? rawPoints : ['Key point 1', 'Key point 2'];
+
   const newSlide = {
-    index: newIndex,
-    title: `New Slide ${newIndex}`,
+    index: newIndex + 1, // 1-based for OutlineItem
+    title,
     intent: 'explain-concept',
-    key_points: ['Key point 1', 'Key point 2'],
+    key_points: keyPoints,
     layout_hint: 'single-column',
   };
 
-  // IMPORTANT: Do NOT invalidate existing approved slides.
-  // Just append to the outline.
   const updatedOutline = [...state.outline, newSlide];
   updateState({ outline: updatedOutline });
 
   window.dispatchEvent(new CustomEvent('global:outline-changed', {
-    detail: { outline: updatedOutline, reason: 'slide-added' }
+    detail: {
+      outline: updatedOutline,
+      reason: 'slide-added',
+      newSlide, // pass the full slide data so the handler can POST it
+    }
   }));
 }
 
 // ── Remove Slide ──────────────────────────────────────────────────────────────
 export function removeSlideFromOutline(index) {
-  // Safety: never remove a slide that is approved (in build phase)
   const slidePhase = state.slidePhases?.[index];
   if (slidePhase === 'build') {
-    console.warn(`[GlobalControl] Cannot remove slide ${index} — it has been built.`);
     window.dispatchEvent(new CustomEvent('global:error', {
       detail: { message: `Slide ${index + 1} has been built and cannot be removed. Regenerate it instead.` }
     }));
     return false;
   }
 
+  const removedSlide = state.outline[index];
   const updatedOutline = state.outline
     .filter((_, i) => i !== index)
     .map((item, i) => ({ ...item, index: i + 1 }));
@@ -273,7 +320,11 @@ export function removeSlideFromOutline(index) {
   updateState({ outline: updatedOutline });
 
   window.dispatchEvent(new CustomEvent('global:outline-changed', {
-    detail: { outline: updatedOutline, reason: 'slide-removed' }
+    detail: {
+      outline: updatedOutline,
+      reason: 'slide-removed',
+      removedIndex: index + 1, // 1-based for backend DELETE
+    }
   }));
 
   return true;
@@ -287,29 +338,54 @@ export function reorderSlides(fromIndex, toIndex) {
   const [moved] = outline.splice(fromIndex, 1);
   outline.splice(toIndex, 0, moved);
 
-  // Re-number
   const renumbered = outline.map((item, i) => ({ ...item, index: i + 1 }));
 
-  updateState({ outline: renumbered });
+  // Build the permutation: permutation[newPos] = oldPos
+  const originalIndices = Array.from({ length: renumbered.length }, (_, i) => i);
+  const permutation = [...originalIndices];
+  const [movedPerm] = permutation.splice(fromIndex, 1);
+  permutation.splice(toIndex, 0, movedPerm);
+
+  // Remap all slide-content maps to the new positions so navigation stays correct
+  // permutation[newPos] = oldPos  →  newMap[newPos] = oldMap[oldPos]
+  const remapByIndex = (oldMap) => {
+    const newMap = {};
+    permutation.forEach((oldPos, newPos) => {
+      if (oldMap[oldPos] !== undefined) {
+        newMap[newPos] = oldMap[oldPos];
+      }
+    });
+    return newMap;
+  };
+
+  const remapSlides = (oldSlides) =>
+    oldSlides.map((s, _) => s).map((s) => {
+      const newPos = permutation.indexOf(s.index);
+      return newPos !== -1 ? { ...s, index: newPos } : s;
+    });
+
+  updateState({
+    outline: renumbered,
+    latestSlides: remapByIndex(state.latestSlides),
+    draftSlides: remapByIndex(state.draftSlides),
+    slideAudits: remapByIndex(state.slideAudits),
+    generatingSlides: remapByIndex(state.generatingSlides),
+    promptApplyingSlides: remapByIndex(state.promptApplyingSlides),
+    slides: remapSlides(state.slides),
+  });
 
   window.dispatchEvent(new CustomEvent('global:outline-changed', {
-    detail: { outline: renumbered, reason: 'reordered' }
+    detail: {
+      outline: renumbered,
+      reason: 'reordered',
+      permutation, // correct mapping for backend
+    }
   }));
 }
 
-// ── Internal: emit changes to the backend ────────────────────────────────────
-function _emitGlobalChange(field, value) {
-  window.dispatchEvent(new CustomEvent('global:setting-changed', {
-    detail: { field, value, globalState: { ...globalState } }
-  }));
-}
-
-// ── Serialize global settings for backend sync ────────────────────────────────
+// ── Serialize for backend ─────────────────────────────────────────────────────
 export function getGlobalSettingsPayload() {
   return {
-    tone: globalState.tone,
-    audience: globalState.audience,
-    narrative_structure: globalState.narrativeStructure,
-    deck_instructions: globalState.deckInstructions,
+    deck_instructions: globalState.deckInstructions || null,
   };
 }

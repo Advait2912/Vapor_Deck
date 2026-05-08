@@ -1,14 +1,13 @@
 """
 AUDIT MODEL
 ────────────
-Represents the result of a vision audit on a rendered slide.
+Result type for vision-model slide audits.
 
-Used by the Playwright validation pipeline (Goal 3).
-
-Verdict options:
-  good       → slide looks fine, show to user
-  fixable    → minor issues detected, auto-fix attempted
-  regenerate → major layout problems, trigger one auto-regeneration
+Verdicts:
+  good       → layout looks clean and professional
+  fixable    → minor issues; refine_prompt is set for user-triggered fix
+  regenerate → significant layout problems; refine_prompt explains the issues
+  audit_failed → vision model errored or timed out
 """
 from __future__ import annotations
 from pydantic import BaseModel
@@ -19,7 +18,7 @@ class VisionAuditResult(BaseModel):
 
     verdict: str = "good"  # "good" | "fixable" | "regenerate"
     visual_issues: list[str] = []
-    fix_instructions: str | None = None
+    refine_prompt: str | None = None  # Ready-to-use refinement instruction for the user
 
     # Specific checks
     has_overflow: bool = False
@@ -41,43 +40,6 @@ class VisionAuditResult(BaseModel):
     def needs_regeneration(self) -> bool:
         return self.verdict == "regenerate"
 
+    def needs_fix(self) -> bool:
+        return self.verdict in ("fixable", "regenerate")
 
-class SlideLifecycle(BaseModel):
-    """
-    Per-slide lifecycle state object.
-
-    States (in order):
-      PLANNING   → outline defined, not yet built
-      BUILDING   → HTML generation in progress
-      VALIDATING → Playwright snapshot + vision audit running
-      REVIEWING  → User is looking at the slide
-      APPROVED   → User approved, slide is locked
-      REFINING   → User triggered a refinement
-      ERROR      → Something failed
-
-    NOTE: PLANNING → BUILDING is a ONE-WAY transition.
-    Once a slide enters BUILDING, it cannot return to PLANNING.
-    This is enforced in state.js via lockSlideIntoBuild().
-    """
-
-    status: str = "PLANNING"
-
-    # Snapshot + audit
-    snapshot_b64: str | None = None
-    audit: VisionAuditResult | None = None
-
-    # History of HTML versions (for comparison view)
-    history: list[str] = []   # list of past HTML versions
-
-    # Locked = approved, no more changes except explicit regeneration
-    locked: bool = False
-
-    # Auto-fix attempt count (max = 1 to prevent infinite loops)
-    auto_fix_attempts: int = 0
-    max_auto_fix_attempts: int = 1
-
-    def can_auto_fix(self) -> bool:
-        return self.auto_fix_attempts < self.max_auto_fix_attempts
-
-    def record_auto_fix(self) -> None:
-        self.auto_fix_attempts += 1

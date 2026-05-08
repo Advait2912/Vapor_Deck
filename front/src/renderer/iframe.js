@@ -13,6 +13,22 @@
  * A small miracle by frontend standards.
  */
 
+import prismTheme from 'prismjs/themes/prism-tomorrow.css?raw';
+import prismCore from 'prismjs/prism.js?raw';
+import prismJS from 'prismjs/components/prism-javascript?raw';
+import prismPy from 'prismjs/components/prism-python?raw';
+import prismTS from 'prismjs/components/prism-typescript?raw';
+import prismBash from 'prismjs/components/prism-bash?raw';
+
+// Escape backticks and ${ so they don't break the template literal in buildBaseDocument
+const _esc = (s) => s.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+
+const safePrismCore = _esc(prismCore);
+const safePrismJS = _esc(prismJS);
+const safePrismPy = _esc(prismPy);
+const safePrismTS = _esc(prismTS);
+const safePrismBash = _esc(prismBash);
+
 // ── Buffer state for streaming ────────────────────────────────────────────────
 
 const _buffers = new Map();
@@ -22,9 +38,9 @@ function _getBuffer(iframeId) {
     _buffers.set(iframeId, {
       pending: false,
       accumulated: '',
+      generation: 0,  // incremented on clear; stale timers compare against this
     });
   }
-
   return _buffers.get(iframeId);
 }
 
@@ -82,10 +98,9 @@ export function buildBaseDocument(
   >
 
   <!-- Prism Theme -->
-  <link
-    rel="stylesheet"
-    href="/lib/prism/prism-tomorrow.css"
-  >
+  <style>
+    ${prismTheme}
+  </style>
 
   <style>
 
@@ -108,16 +123,7 @@ export function buildBaseDocument(
       background: transparent;
     }
 
-    #slide-scaler {
-      position: absolute;
-      top: 0;
-      left: 0;
 
-      transform-origin: top left;
-
-      width: max-content;
-      height: max-content;
-    }
 
     .reveal {
       opacity: 0;
@@ -136,7 +142,7 @@ export function buildBaseDocument(
       transform: translateY(0);
     }
 
-    /* Audit Mode: No animations */
+    /* Audit Mode: Stop all animations for instant capture */
     body.audit-mode *,
     body.audit-mode *::before,
     body.audit-mode *::after {
@@ -149,69 +155,24 @@ export function buildBaseDocument(
 
 <body>
 
-  <div id="slide-scaler">
+  <div id="slide-container" style="width: 100%; height: 100%;">
     ${slideHtml}
   </div>
 
   <!-- Prism Core & Languages -->
-  <script src="/lib/prism/prism.js"></script>
-  <script src="/lib/prism/components/prism-javascript.js"></script>
-  <script src="/lib/prism/components/prism-python.js"></script>
-  <script src="/lib/prism/components/prism-typescript.js"></script>
-  <script src="/lib/prism/components/prism-bash.js"></script>
+  <script>
+    (function() {
+      ${prismCore}
+      ${prismJS}
+      ${prismPy}
+      ${prismTS}
+      ${prismBash}
+    })();
+  </script>
 
   <script>
 
-    // ─────────────────────────────────────────────────────────────
-    // Slide scaler
-    // ─────────────────────────────────────────────────────────────
 
-    function fitSlide() {
-
-      const scaler =
-        document.getElementById('slide-scaler');
-
-      if (!scaler) return;
-
-      const slide =
-        scaler.firstElementChild;
-
-      if (!slide) return;
-
-      const naturalW =
-        slide.scrollWidth ||
-        slide.offsetWidth ||
-        1280;
-
-      const naturalH =
-        slide.scrollHeight ||
-        slide.offsetHeight ||
-        720;
-
-      const scaleX =
-        window.innerWidth / naturalW;
-
-      const scaleY =
-        window.innerHeight / naturalH;
-
-      const scale =
-        Math.min(scaleX, scaleY);
-
-      scaler.style.transform =
-        'scale(' + scale + ')';
-
-      const scaledW =
-        naturalW * scale;
-
-      const scaledH =
-        naturalH * scale;
-
-      scaler.style.marginLeft =
-        ((window.innerWidth - scaledW) / 2) + 'px';
-
-      scaler.style.marginTop =
-        ((window.innerHeight - scaledH) / 2) + 'px';
-    }
 
     // ─────────────────────────────────────────────────────────────
     // Reveal animations
@@ -256,20 +217,17 @@ export function buildBaseDocument(
     // ─────────────────────────────────────────────────────────────
 
     window.__PATCH_SLIDE__ = function(newHtml) {
-      const scaler = document.getElementById('slide-scaler');
-      if (!scaler) return;
+      const container = document.getElementById('slide-container');
+      if (!container) return;
       window.__VAPOR_READY__ = false;
-      scaler.innerHTML = newHtml;
-
-      requestAnimationFrame(() => {
-        fitSlide();
-      });
+      container.innerHTML = newHtml;
 
       setTimeout(() => {
         triggerReveal();
         highlightCode();
+        if (typeof window.parent.scaleIframe === 'function') window.parent.scaleIframe();
         // Signal ready for audit after a small delay to ensure layout stability
-        setTimeout(() => { window.__VAPOR_READY__ = true; }, 50);
+        setTimeout(() => { window.__VAPOR_READY__ = true; }, 300);
       }, 50);
     };
 
@@ -279,19 +237,14 @@ export function buildBaseDocument(
 
     window.addEventListener('load', function() {
       window.__VAPOR_READY__ = false;
-      fitSlide();
 
       setTimeout(() => {
         triggerReveal();
         highlightCode();
-        setTimeout(() => { window.__VAPOR_READY__ = true; }, 100);
+        if (typeof window.parent.scaleIframe === 'function') window.parent.scaleIframe();
+        setTimeout(() => { window.__VAPOR_READY__ = true; }, 300);
       }, 100);
     });
-
-    window.addEventListener(
-      'resize',
-      fitSlide
-    );
 
   </script>
 
@@ -356,26 +309,22 @@ export function appendStreamToken(
   theme = 'dark-tech',
   iframeId = 'main'
 ) {
-
-  const buf =
-    _getBuffer(iframeId);
-
+  const buf = _getBuffer(iframeId);
   buf.accumulated += token;
 
   if (!buf.pending) {
-
     buf.pending = true;
+    const scheduledGeneration = buf.generation;
 
     setTimeout(() => {
+      // Discard if clearStreamBuffer() was called since we scheduled
+      // (means the user navigated away or a new generation started)
+      if (!_buffers.has(iframeId)) return;
+      const current = _buffers.get(iframeId);
+      if (current.generation !== scheduledGeneration) return;
 
-      _patchIframe(
-        iframe,
-        buf.accumulated,
-        theme
-      );
-
-      buf.pending = false;
-
+      _patchIframe(iframe, current.accumulated, theme);
+      current.pending = false;
     }, 200);
   }
 }
@@ -385,19 +334,18 @@ export function finalizeStream(
   theme = 'dark-tech',
   iframeId = 'main'
 ) {
+  const buf = _buffers.get(iframeId);
+  // If the buffer was already cleared (navigation happened), don't patch
+  if (!buf) return;
 
-  const buf =
-    _getBuffer(iframeId);
-
+  const capturedGeneration = buf.generation;
   buf.pending = false;
 
   if (buf.accumulated) {
-
-    _patchIframe(
-      iframe,
-      buf.accumulated,
-      theme
-    );
+    // Double-check generation hasn't moved since we started
+    if (_buffers.has(iframeId) && _buffers.get(iframeId).generation === capturedGeneration) {
+      _patchIframe(iframe, buf.accumulated, theme);
+    }
   }
 
   _buffers.delete(iframeId);
@@ -406,6 +354,14 @@ export function finalizeStream(
 export function clearStreamBuffer(
   iframeId = 'main'
 ) {
+  // Increment generation so any in-flight 200ms timers self-discard
+  const existing = _buffers.get(iframeId);
+  if (existing) {
+    existing.generation++;
+    existing.accumulated = '';
+    existing.pending = false;
+  }
+  // Also remove so _getBuffer starts fresh on next generation
   _buffers.delete(iframeId);
 }
 

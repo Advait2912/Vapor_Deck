@@ -96,24 +96,40 @@ export function setupEventListeners(actions) {
     });
   }
 
-  // Mode Toggles
-  if (elements.planModeBtn) {
-    elements.planModeBtn.addEventListener('click', () => onSwitchMode('plan'));
-  }
-  if (elements.buildModeBtn) {
-    elements.buildModeBtn.addEventListener('click', () => onSwitchMode('build'));
-  }
+  // Mode Pill Toggle (new UI — two pill buttons)
+  const modePillBtns = document.querySelectorAll('.mode-pill-btn');
+  modePillBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newMode = btn.dataset.mode;
+      if (newMode !== state.mode) onSwitchMode(newMode);
+    });
+  });
+
+  // Auto-resize both textareas as user types
+  [elements.promptInput, elements.refineInstructionInput].forEach(ta => {
+    if (!ta) return;
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 110) + 'px';
+    });
+  });
+
+  // Global Keyboard Shortcuts
+  window.addEventListener('keydown', (e) => {
+    // Ctrl + P for Mode Toggle
+    if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault(); // Prevent print dialog
+      const newMode = state.mode === 'plan' ? 'build' : 'plan';
+      onSwitchMode(newMode);
+    }
+  });
 
   // Custom Event for per-slide generation
   window.addEventListener('generate-slide', (e) => {
     onStartSlideGeneration(e.detail.index);
   });
 
-  elements.approveBtn.addEventListener('click', () => {
-    if (state.status.toUpperCase() === 'REVIEWING') {
-      onApproveSlide();
-    }
-  });
+  // Approval removed in favor of live flow ──────────────────────────────────
 
 
   if (elements.regenBtn) {
@@ -124,6 +140,15 @@ export function setupEventListeners(actions) {
   if (elements.customRegenBtn) {
     elements.customRegenBtn.addEventListener('click', () => {
       onCustomRegenerate?.();
+    });
+  }
+
+  if (elements.refineInstructionInput) {
+    elements.refineInstructionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        onCustomRegenerate?.();
+      }
     });
   }
 
