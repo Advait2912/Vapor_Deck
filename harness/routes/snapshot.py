@@ -113,7 +113,7 @@ async def take_snapshot(session_id: str, n: int, req: SnapshotRequest):
         existing_slide.snapshot_b64 = None
     if audit_result:
         existing_slide.audit = audit_result.model_dump()
-
+    
     save_session(session)
 
     # Save individual slide files for direct serving / export

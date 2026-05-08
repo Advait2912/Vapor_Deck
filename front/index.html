@@ -107,7 +107,13 @@
 
       <div id="r-resizer" class="resizer"></div>
       <aside id="info-sidebar" class="info-sidebar">
-        <div class="sidebar-header">Slide Details</div>
+        <div class="sidebar-header" style="display:flex; justify-content:space-between; align-items:center;">
+          Slide Details
+          <div id="info-view-toggle" style="display:none; gap:3px; flex-shrink:0;">
+            <button id="info-view-detail" class="btn active" style="padding:2px 8px; font-size:0.65rem;">Detail</button>
+            <button id="info-view-overview" class="btn" style="padding:2px 8px; font-size:0.65rem;">Overview</button>
+          </div>
+        </div>
         <div id="info-list" class="info-list">
           <div style="padding: 20px; color: var(--text-muted); font-size: 0.85rem;">
             Select a slide or generate an outline to see details.
@@ -147,6 +153,31 @@
         <div id="history-strip" style="display: flex; gap: 12px; height: 100px; overflow-x: auto; padding-bottom: 10px;">
           <!-- Thumbnails of refinement history -->
         </div>
+      </div>
+      <!-- Slideshow Overlay -->
+      <div id="slideshow-overlay" style="display:none; position:fixed; inset:0; background:#0a0a0a; z-index:200; flex-direction:column; align-items:center; justify-content:center;">
+        <!-- Top bar -->
+        <div style="position:absolute; top:0; left:0; right:0; height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span id="slideshow-counter" style="color:#888; font-size:0.75rem; font-family:monospace; letter-spacing:0.05em;">1 / 8</span>
+          <button id="slideshow-close" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#aaa; border-radius:3px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">✕ Esc</button>
+        </div>
+        <!-- Slide iframe (letterboxed 16:9) -->
+        <div id="slideshow-frame" style="
+          position:relative;
+          width: min(92vw, calc((100vh - 80px) * 16 / 9));
+          height: min(calc(92vw * 9 / 16), calc(100vh - 80px));
+          border-radius: 6px;
+          overflow: hidden;
+          box-shadow: 0 8px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.07);
+        ">
+          <iframe id="slideshow-iframe" frameborder="0" style="width:100%; height:100%; border:none; display:block;"></iframe>
+        </div>
+        <!-- Prev -->
+        <button id="slideshow-prev" style="position:absolute; left:16px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); color:#fff; border-radius:50%; width:46px; height:46px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s;">&#8249;</button>
+        <!-- Next -->
+        <button id="slideshow-next" style="position:absolute; right:16px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.14); color:#fff; border-radius:50%; width:46px; height:46px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s;">&#8250;</button>
+        <!-- Dot strip -->
+        <div id="slideshow-dots" style="position:absolute; bottom:16px; display:flex; gap:7px; align-items:center;"></div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

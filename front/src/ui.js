@@ -86,11 +86,20 @@ export function updateUI() {
 
   // Status-based visibility
   const inSlidePhase = ['GENERATING', 'REVIEWING', 'APPROVING', 'DONE'].includes(status);
-  
+
+  // Always show the Detail/Overview toggle whenever an outline exists
+  const toggle = document.getElementById('info-view-toggle');
+  if (toggle) toggle.style.display = state.outline.length ? 'flex' : 'none';
+
   if (inSlidePhase) {
     elements.refinePanel.style.display = 'block';
     if (state.outline.length > 0) {
-      renderSlideInfo(state.currentIndex);
+      // Delegate to refreshInfoPanel so the Detail/Overview toggle is respected
+      if (typeof window.refreshInfoPanel === 'function') {
+        window.refreshInfoPanel();
+      } else {
+        renderSlideInfo(state.currentIndex);
+      }
     }
   } else {
     elements.refinePanel.style.display = 'none';

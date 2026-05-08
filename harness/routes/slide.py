@@ -35,7 +35,7 @@ async def _update_context_in_background(session_id: str, html: str, model_name: 
         raw_ctx = await collect_stream(
             model,
             [{"role": "user", "content": update_prompt}],
-            CONTEXT_UPDATE_SYSTEM,
+            CONTEXT_UPDATE_SYSTEM
         )
         updated_ctx = json.loads(strip_fences(raw_ctx))
         updated_ctx["synthesis"] = session.deck_context.get("synthesis", {})
@@ -258,14 +258,14 @@ async def generate_slide(session_id: str, n: int, force: bool = False):
                     SLIDE_SYSTEM,
                 ):
                     if token:
-                        safe = token.replace("\n", "\\n")
-                        yield f"data: {safe}\n\n"
+                        # Standard flat SSE
+                        yield f"data: {token}\n\n"
+                
+                yield "data: [DONE]\n\n"
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 yield f"data: [ERROR] {str(e)}\n\n"
-            finally:
-                yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             event_stream(),
@@ -442,14 +442,13 @@ async def refine_slide(session_id: str, n: int, req: RefineSlideRequest):
                 SLIDE_SYSTEM,
             ):
                 if token:
-                    safe = token.replace("\n", "\\n")
-                    yield f"data: {safe}\n\n"
+                    yield f"data: {token}\n\n"
+            
+            yield "data: [DONE]\n\n"
         except Exception as e:
             import traceback
             traceback.print_exc()
             yield f"data: [ERROR] {str(e)}\n\n"
-        finally:
-            yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         event_stream(),

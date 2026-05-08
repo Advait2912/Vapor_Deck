@@ -49,6 +49,7 @@ import { setupEventListeners } from './events.js';
 import { mountSlide, mountPlaceholder, streamToken, finalizeSlide, clearStreamBuffer } from './renderer/index.js';
 import { exportDeckAsPDF, getExportableSlideCount } from './export.js';
 import { renderGlobalControls, globalState, addSlideToOutline, reorderSlides } from './ui/global_control.js';
+import { buildBaseDocument } from './renderer/iframe.js';
 import {
   comparisonState,
   enterComparison,
@@ -72,6 +73,22 @@ let slideJobCounter = 0;
 // previous audit overwriting a newer one (race condition fix).
 const latestAuditJobBySlide = {};
 let auditJobCounter = 0;
+
+// ── Info Panel View State ─────────────────────────────────────────────────────
+// Tracks whether the right sidebar shows per-slide detail or the full overview.
+let infoView = 'detail'; // 'detail' | 'overview'
+
+function refreshInfoPanel() {
+  const toggle = document.getElementById('info-view-toggle');
+  if (toggle && state.outline.length) toggle.style.display = 'flex';
+  if (infoView === 'overview') {
+    renderOutlineContentSummary(elements.infoList);
+  } else {
+    renderSlideInfo(state.currentIndex);
+  }
+}
+// Expose so ui.js can call it from updateUI without a circular import
+window.refreshInfoPanel = refreshInfoPanel;
 
 /**
  * Helper to render the outline with all necessary callbacks and state.
@@ -248,6 +265,31 @@ Please integrate this into the outline at the most logical position. Return the 
   window.addEventListener('global:error', (e) => {
     renderChatMessage('ai', `⚠ ${e.detail.message}`);
     elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+  });
+
+  window.addEventListener('global:generate-all', () => {
+    if (!state.sessionId || !state.outline.length) return;
+    if (state.status === 'REVIEWING_OUTLINE') return;
+    state.outline.forEach((_, idx) => {
+      const isBuilt = !!state.latestSlides[idx] || state.slides.some(s => s.index === idx);
+      if (!isBuilt && !state.generatingSlides[idx]) {
+        startSlideGeneration(idx, false);
+      }
+    });
+  });
+
+  // ── Info Panel Toggle ─────────────────────────────────────────────────────
+  document.getElementById('info-view-detail')?.addEventListener('click', () => {
+    infoView = 'detail';
+    document.getElementById('info-view-detail')?.classList.add('active');
+    document.getElementById('info-view-overview')?.classList.remove('active');
+    refreshInfoPanel();
+  });
+  document.getElementById('info-view-overview')?.addEventListener('click', () => {
+    infoView = 'overview';
+    document.getElementById('info-view-overview')?.classList.add('active');
+    document.getElementById('info-view-detail')?.classList.remove('active');
+    refreshInfoPanel();
   });
 }
 
@@ -455,7 +497,7 @@ async function loadProjectInfo() {
       const s = state.status;
       if (s === 'REVIEWING_OUTLINE') {
         state.phase = 'CONTENT';
-        renderOutlineContentSummary(elements.infoList);
+        refreshInfoPanel();
       } else if (s === 'GENERATING') {
         state.phase = 'DESIGN';
         const approved = state.slides.find(s => s.index === state.currentIndex);
@@ -545,7 +587,7 @@ async function startGeneration(prompt) {
     state.status = 'REVIEWING_OUTLINE';
     state.phase = 'CONTENT';
     renderOutline(navigateToSlide);
-    renderOutlineContentSummary(elements.infoList);
+    refreshInfoPanel();
     mountGlobalControlsInSidebar();
     updateUI();
   } catch (error) {
@@ -631,14 +673,15 @@ async function handlePlanChat(message) {
     currentAbortController = new AbortController();
     const res = await sendPlanChat(state.sessionId, message, state.currentIndex + 1, currentAbortController.signal);
     currentAbortController = null;
-    updateState({ outline: res.outline });
+    const sortedOutline = (res.outline || []).slice().sort((a, b) => a.index - b.index);
+    updateState({ outline: sortedOutline });
     state.status = 'REVIEWING_OUTLINE';
     // Input already cleared above
     const aiResponse = res.message || "Outline updated.";
     state.messages.push({ role: 'ai', text: aiResponse });
     renderChatMessage('ai', aiResponse);
     renderOutline(navigateToSlide);
-    renderOutlineContentSummary(elements.infoList);
+    refreshInfoPanel();
     updateUI();
     persistSessionViewState();
   } catch (error) {
@@ -1314,7 +1357,97 @@ export function manualAudit() {
   _runVisionAuditInBackground(state.currentIndex, state.currentIndex + 1, state.currentSlideHtml);
 }
 
+// ── Slideshow ──────────────────────────────────────────────────────────────────
+function initSlideshow() {
+  const overlay   = document.getElementById('slideshow-overlay');
+  const iframe    = document.getElementById('slideshow-iframe');
+  const counter   = document.getElementById('slideshow-counter');
+  const dots      = document.getElementById('slideshow-dots');
+  const closeBtn  = document.getElementById('slideshow-close');
+  const prevBtn   = document.getElementById('slideshow-prev');
+  const nextBtn   = document.getElementById('slideshow-next');
+  if (!overlay || !iframe) return;
+
+  let currentIdx = 0;
+  let keyHandler = null;
+
+  const PLACEHOLDER_HTML = (title) => `
+    <html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
+      <div style="text-align:center;color:#444;">
+        <div style="font-size:2rem;margin-bottom:12px;">⏳</div>
+        <div style="font-size:1rem;color:#555;">${title || 'Not generated yet'}</div>
+      </div>
+    </body></html>`;
+
+  function renderDots() {
+    dots.innerHTML = '';
+    state.outline.forEach((_, i) => {
+      const dot = document.createElement('div');
+      const isBuilt = !!state.latestSlides[i];
+      dot.style.cssText = `width:7px;height:7px;border-radius:50%;cursor:pointer;transition:all 0.15s;background:${
+        i === currentIdx ? '#fff' : isBuilt ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)'
+      };transform:${i === currentIdx ? 'scale(1.3)' : 'scale(1)'};`;
+      dot.addEventListener('click', () => goTo(i));
+      dots.appendChild(dot);
+    });
+  }
+
+  function goTo(idx) {
+    const total = state.outline.length;
+    if (!total) return;
+    currentIdx = (idx + total) % total;
+    const rawHtml = state.latestSlides[currentIdx];
+    if (rawHtml) {
+      // Use the same renderer as the main preview so theme CSS loads correctly
+      iframe.srcdoc = buildBaseDocument(rawHtml, state.theme || 'dark-tech');
+    } else {
+      iframe.srcdoc = PLACEHOLDER_HTML(state.outline[currentIdx]?.title);
+    }
+    counter.textContent = `${currentIdx + 1} / ${total}`;
+    renderDots();
+  }
+
+  function open() {
+    if (!state.outline.length) return;
+    // Start at the slide the user is currently viewing
+    currentIdx = state.currentIndex || 0;
+    overlay.style.display = 'flex';
+    goTo(currentIdx);
+
+    keyHandler = (e) => {
+      if (e.key === 'Escape')      close();
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(currentIdx + 1);
+      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   goTo(currentIdx - 1);
+    };
+    window.addEventListener('keydown', keyHandler);
+  }
+
+  function close() {
+    overlay.style.display = 'none';
+    iframe.srcdoc = '';
+    if (keyHandler) window.removeEventListener('keydown', keyHandler);
+    keyHandler = null;
+  }
+
+  closeBtn?.addEventListener('click', close);
+  prevBtn?.addEventListener('click', () => goTo(currentIdx - 1));
+  nextBtn?.addEventListener('click', () => goTo(currentIdx + 1));
+
+  // Open via Deck Actions button
+  window.addEventListener('global:present', open);
+
+  // Open via F key (when slideshow is not already open)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'f' || e.key === 'F') {
+      // Don't intercept if user is typing in an input
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (overlay.style.display === 'none') open();
+    }
+  });
+}
+
 init();
+initSlideshow();
 // Window event for updating slide title directly from sidebar
 window.addEventListener('update-slide-title', async (e) => {
   const { index, title } = e.detail;

@@ -42,8 +42,11 @@ export function renderGlobalControls(container) {
         <button id="reorder-slides-btn" class="global-btn" title="Drag slides to reorder">
           ⇅ Reorder
         </button>
-        <button id="deck-instructions-btn" class="global-btn" title="Add global instructions for all slides">
-          ✏ Instructions
+        <button id="present-btn" class="global-btn" title="Fullscreen slideshow preview (F)">
+          ▶ Present
+        </button>
+        <button id="generate-all-btn" class="global-btn" title="Generate all slides that haven't been built yet">
+          ✧ Generate All
         </button>
       </div>
 
@@ -96,23 +99,7 @@ export function renderGlobalControls(container) {
         </div>
       </div>
 
-      <!-- Deck Instructions Panel (hidden by default) -->
-      <div id="deck-instructions-panel" style="display: none; margin-top: 2px;">
-        <textarea
-          id="deck-instructions-input"
-          placeholder="Global deck instructions (e.g. 'Include code examples', 'Use dark humor'...)"
-          style="
-            width: 100%; min-height: 56px; background: var(--bg-input);
-            border: 1px solid var(--border); color: var(--text-main);
-            padding: 8px; border-radius: 3px; font-size: 0.75rem;
-            font-family: inherit; resize: vertical; outline: none;
-          "
-        ></textarea>
-        <div style="display: flex; gap: 6px; margin-top: 4px;">
-          <button id="apply-instructions-btn" class="global-btn primary-small">Apply</button>
-          <button id="cancel-instructions-btn" class="global-btn">Cancel</button>
-        </div>
-      </div>
+
     </div>
 
     <style>
@@ -237,31 +224,17 @@ function _bindGlobalControlEvents(container) {
     window.dispatchEvent(new CustomEvent('global:reorder-mode', { detail: { active: false } }));
   });
 
-  // ── Deck Instructions ────────────────────────────────────────────────────────
-  const instrBtn    = container.querySelector('#deck-instructions-btn');
-  const instrPanel  = container.querySelector('#deck-instructions-panel');
-  const applyBtn    = container.querySelector('#apply-instructions-btn');
-  const cancelInstr = container.querySelector('#cancel-instructions-btn');
-
-  instrBtn?.addEventListener('click', () => {
-    const isVisible = instrPanel.style.display !== 'none';
-    instrPanel.style.display = isVisible ? 'none' : 'block';
+  // ── Present (Slideshow) ───────────────────────────────────────────────────────
+  const presentBtn = container.querySelector('#present-btn');
+  presentBtn?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('global:present'));
   });
 
-  applyBtn?.addEventListener('click', () => {
-    const instrInput = container.querySelector('#deck-instructions-input');
-    const text = instrInput?.value?.trim();
-    if (text) {
-      globalState.deckInstructions = text;
-      window.dispatchEvent(new CustomEvent('global:setting-changed', {
-        detail: { field: 'deckInstructions', value: text, globalState: { ...globalState } }
-      }));
-    }
-    instrPanel.style.display = 'none';
-  });
-
-  cancelInstr?.addEventListener('click', () => {
-    instrPanel.style.display = 'none';
+  // ── Generate All ─────────────────────────────────────────────────────────────
+  const generateAllBtn = container.querySelector('#generate-all-btn');
+  generateAllBtn?.addEventListener('click', () => {
+    if (state.status === 'REVIEWING_OUTLINE') return; // not in generate phase yet
+    window.dispatchEvent(new CustomEvent('global:generate-all'));
   });
 }
 
@@ -336,16 +309,16 @@ export function reorderSlides(fromIndex, toIndex) {
   const [moved] = outline.splice(fromIndex, 1);
   outline.splice(toIndex, 0, moved);
 
+  // Enforce invariant: outline[i].index === i + 1, always.
+  // This guarantees the AI can never re-sort back to pre-reorder positions.
   const renumbered = outline.map((item, i) => ({ ...item, index: i + 1 }));
 
-  // Build the permutation: permutation[newPos] = oldPos
-  const originalIndices = Array.from({ length: renumbered.length }, (_, i) => i);
-  const permutation = [...originalIndices];
+  // Build permutation: permutation[newPos] = oldPos (0-based positions)
+  const permutation = Array.from({ length: renumbered.length }, (_, i) => i);
   const [movedPerm] = permutation.splice(fromIndex, 1);
   permutation.splice(toIndex, 0, movedPerm);
 
-  // Remap all slide-content maps to the new positions so navigation stays correct
-  // permutation[newPos] = oldPos  →  newMap[newPos] = oldMap[oldPos]
+  // Remap a position-keyed map: newMap[newPos] = oldMap[oldPos]
   const remapByIndex = (oldMap) => {
     const newMap = {};
     permutation.forEach((oldPos, newPos) => {
@@ -356,11 +329,15 @@ export function reorderSlides(fromIndex, toIndex) {
     return newMap;
   };
 
-  const remapSlides = (oldSlides) =>
-    oldSlides.map((s, _) => s).map((s) => {
-      const newPos = permutation.indexOf(s.index);
-      return newPos !== -1 ? { ...s, index: newPos } : s;
-    });
+  // Convert state.slides (array with .index === 0-based position) to a
+  // position-keyed map, remap it, then convert back to array.
+  const slidesMap = {};
+  state.slides.forEach(s => { slidesMap[s.index] = s; });
+  const remappedSlidesMap = remapByIndex(slidesMap);
+  const remappedSlides = Object.entries(remappedSlidesMap).map(([newPos, s]) => ({
+    ...s,
+    index: Number(newPos),
+  }));
 
   updateState({
     outline: renumbered,
@@ -369,14 +346,14 @@ export function reorderSlides(fromIndex, toIndex) {
     slideAudits: remapByIndex(state.slideAudits),
     generatingSlides: remapByIndex(state.generatingSlides),
     promptApplyingSlides: remapByIndex(state.promptApplyingSlides),
-    slides: remapSlides(state.slides),
+    slides: remappedSlides,
   });
 
   window.dispatchEvent(new CustomEvent('global:outline-changed', {
     detail: {
       outline: renumbered,
       reason: 'reordered',
-      permutation, // correct mapping for backend
+      permutation,
     }
   }));
 }
