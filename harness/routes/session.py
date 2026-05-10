@@ -21,7 +21,7 @@ from models.session import DeckSession, OutlineItem
 from store.sessions import sessions, get_session, save_session, delete_session
 from services.stream_utils import collect_stream, strip_fences
 from services.context_synthesis import synthesize_context
-from prompts.outline import build_outline_prompt, OUTLINE_SYSTEM
+from prompts.outline import build_outline_prompt, build_multimodal_outline_prompt, OUTLINE_SYSTEM
 from prompts.context_update import initial_deck_context
 
 logger = logging.getLogger("session")
@@ -165,7 +165,39 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
     save_session(session)
 
     model = get_model(session.text_model)
-    prompt = build_outline_prompt(session.deck_context, session.theme, preferred_slides)
+
+    # ── Multimodal routing ───────────────────────────────────────────────────
+    # Detect whether the session has uploaded images or documents.
+    # Image extensions match those in upload.py IMAGE_EXTS.
+    IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif", "svg"}
+    DOC_EXTS   = {"pdf", "docx", "doc"}
+
+    image_units = [
+        u for u in session.input_units
+        if (u.input_type or "").lower() in IMAGE_EXTS
+    ]
+    doc_units = [
+        u for u in session.input_units
+        if (u.input_type or "").lower() in DOC_EXTS
+    ]
+
+    has_multimodal = bool(image_units or doc_units)
+
+    if has_multimodal:
+        logger.info(
+            f"[{session_id}] multimodal outline: "
+            f"{len(image_units)} image(s), {len(doc_units)} doc(s)"
+        )
+        prompt = build_multimodal_outline_prompt(
+            session.deck_context,
+            session.theme,
+            image_units=image_units,
+            doc_units=doc_units,
+            preferred_slides=preferred_slides,
+        )
+    else:
+        logger.info(f"[{session_id}] standard outline (no images/docs)")
+        prompt = build_outline_prompt(session.deck_context, session.theme, preferred_slides)
 
     if os.getenv("DEBUG_PROMPTS", "0") == "1":
         os.makedirs("debug", exist_ok=True)
@@ -190,7 +222,15 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
         # Sanitize: Keep only printable chars and standard whitespace
         sanitized = "".join(c for c in cleaned if c.isprintable() or c in "\n\r\t")
         outline_data = json.loads(sanitized, strict=False)
-        session.outline = [OutlineItem(**item) for item in outline_data]
+        # Parse outline items — read assigned_images if present (multimodal path)
+        parsed_items = []
+        for item in outline_data:
+            # assigned_images is optional — defaults to [] for backward compat
+            assigned_images = item.pop("assigned_images", []) or []
+            outline_item = OutlineItem(**item)
+            outline_item.assigned_images = list(assigned_images)
+            parsed_items.append(outline_item)
+        session.outline = parsed_items
     except Exception as e:
         logger.error(f"[{session_id}] outline parse failed: {e}")
         logger.debug(f"[{session_id}] raw_outline: {raw_outline[:1000]}")

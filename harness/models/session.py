@@ -12,6 +12,7 @@ class OutlineItem(BaseModel):
     intent: str  # title-hero | explain-concept | explain-mechanism | show-example | compare | list-points | code-walkthrough | summary
     key_points: list[str]
     layout_hint: str  # single-column | two-column | code-left | hero-centered | bullet-list
+    assigned_images: list[str] = []  # filenames assigned by LLM during multimodal outline generation
 
 
 class SlideData(BaseModel):

@@ -261,7 +261,20 @@ async def generate_slide(session_id: str, slide_id: str, force: bool = False):
 
         # Get available local assets
         asset_dir = get_project_dir() / "assets"
-        asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+        all_asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
+        # Use assigned_images from outline if available (multimodal path);
+        # fall back to all assets for text-only sessions or pre-multimodal outlines.
+        if slide_spec.assigned_images:
+            # Filter to only files that actually exist on disk
+            assigned_set = set(slide_spec.assigned_images)
+            asset_filenames = [f for f in all_asset_filenames if f in assigned_set]
+            logger.info(
+                f"[{session_id}] slide {n}: using {len(asset_filenames)} assigned image(s) "
+                f"from outline: {asset_filenames}"
+            )
+        else:
+            asset_filenames = all_asset_filenames
 
         prompt = build_slide_prompt(
             n=n,
@@ -460,7 +473,19 @@ async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
 
     # Get available local assets
     asset_dir = get_project_dir() / "assets"
-    asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+    all_asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
+    # Use assigned_images from outline if available (multimodal path);
+    # fall back to all assets for text-only sessions or pre-multimodal outlines.
+    if slide_spec.assigned_images:
+        assigned_set = set(slide_spec.assigned_images)
+        asset_filenames = [f for f in all_asset_filenames if f in assigned_set]
+        logger.info(
+            f"[{session_id}] refine slide {n}: using {len(asset_filenames)} assigned image(s) "
+            f"from outline: {asset_filenames}"
+        )
+    else:
+        asset_filenames = all_asset_filenames
 
     prompt = build_slide_prompt(
         n=n,

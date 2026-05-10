@@ -74,6 +74,11 @@ let slideJobCounter = 0;
 const latestAuditJobBySlide = {};
 let auditJobCounter = 0;
 
+// ── Context Upload State ──────────────────────────────────────────────────────
+// Files staged here are uploaded after session creation, before synthesize.
+/** @type {{ file: File, name: string, type: 'image'|'doc' }[]} */
+let contextUploadQueue = [];
+
 // ── Info Panel View State ─────────────────────────────────────────────────────
 // Tracks whether the right sidebar shows per-slide detail or the full overview.
 let infoView = 'detail'; // 'detail' | 'overview'
@@ -382,6 +387,9 @@ async function init() {
   // Wire up comparison overlay buttons using the new comparison module
   _wireComparisonButtons();
 
+  // Wire up the context upload panel
+  setupContextUpload();
+
   await loadProjectInfo();
   updateUI();
   mountGlobalControlsInSidebar();
@@ -575,6 +583,12 @@ async function handleNewDeck() {
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingRefineImages = [];
+
+  // Reset context upload panel for the new session
+  contextUploadQueue = [];
+  const _pills = document.getElementById('context-file-pills');
+  if (_pills) _pills.innerHTML = '';
+  document.getElementById('context-upload-panel')?.classList.remove('hidden');
   updateState({
     sessionId: null, outline: [], slides: [], messages: [],
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
@@ -592,7 +606,106 @@ async function handleNewDeck() {
   }
 }
 
-// ── Outline Generation ──────────────────────────────────────────────────────────
+// ── Context Upload Panel ───────────────────────────────────────────────────────
+/**
+ * Sets up click-to-pick and drag-and-drop on #context-drop-zone.
+ * Files are queued in contextUploadQueue and shown as pills immediately.
+ * Actual upload happens inside startGeneration once we have a session ID.
+ */
+function setupContextUpload() {
+  const dropZone = document.getElementById('context-drop-zone');
+  const fileInput = document.getElementById('context-file-input');
+  const pillsContainer = document.getElementById('context-file-pills');
+  if (!dropZone || !fileInput || !pillsContainer) return;
+
+  const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']);
+  const DOC_EXTS   = new Set(['pdf', 'docx', 'doc']);
+
+  function getFileType(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (IMAGE_EXTS.has(ext)) return 'image';
+    if (DOC_EXTS.has(ext))   return 'doc';
+    return null;
+  }
+
+  function addPill(entry) {
+    const pill = document.createElement('div');
+    pill.className = `context-file-pill pill-${entry.type}`;
+    pill.dataset.name = entry.name;
+    const icon = entry.type === 'image' ? '🖼' : '📄';
+    pill.innerHTML = `
+      <span class="pill-icon">${icon}</span>
+      <span class="pill-name" title="${entry.name}">${entry.name}</span>
+      <button class="pill-remove" title="Remove">×</button>
+    `;
+    pill.querySelector('.pill-remove').addEventListener('click', () => {
+      contextUploadQueue = contextUploadQueue.filter(e => e !== entry);
+      pill.remove();
+    });
+    pillsContainer.appendChild(pill);
+  }
+
+  function enqueueFiles(files) {
+    for (const file of files) {
+      const type = getFileType(file);
+      if (!type) continue;
+      // Dedup by name
+      if (contextUploadQueue.some(e => e.name === file.name)) continue;
+      const entry = { file, name: file.name, type };
+      contextUploadQueue.push(entry);
+      addPill(entry);
+    }
+  }
+
+  // Click to open file picker
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    enqueueFiles(Array.from(e.target.files || []));
+    fileInput.value = ''; // reset so same file can be re-added after removal
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    enqueueFiles(Array.from(e.dataTransfer.files || []));
+  });
+}
+
+/**
+ * Upload all queued context files to an existing session.
+ * Updates pill styles in-place (uploading → success/error).
+ * Non-fatal: one file failing does not block the rest.
+ */
+async function flushContextUploads(sessionId) {
+  if (!contextUploadQueue.length) return;
+  const pillsContainer = document.getElementById('context-file-pills');
+
+  for (const entry of contextUploadQueue) {
+    const pill = pillsContainer?.querySelector(`[data-name="${CSS.escape(entry.name)}"]`);
+    if (pill) pill.classList.add('pill-uploading');
+
+    try {
+      const role = entry.type === 'doc' ? 'reference' : 'reference';
+      await uploadFile(sessionId, entry.file, role);
+      if (pill) {
+        pill.classList.remove('pill-uploading');
+        // brief success flash
+        pill.style.borderColor = 'rgba(16,185,129,0.6)';
+      }
+    } catch (err) {
+      console.warn(`Context upload failed for '${entry.name}':`, err);
+      if (pill) {
+        pill.classList.remove('pill-uploading');
+        pill.classList.add('pill-error');
+        pill.title = `Upload failed: ${err.message}`;
+      }
+    }
+  }
+}
+
 async function startGeneration(prompt) {
   try {
     state.status = 'INITIALIZING';
@@ -608,10 +721,21 @@ async function startGeneration(prompt) {
     state.sessionId = session.session_id;
 
     state.status = 'SYNTHESIZING';
-    elements.generateBtn.textContent = 'Uploading...';
     updateUI();
+
+    // ── Upload queued context files (images + docs) BEFORE topic text ─────────
+    // Order matters: context must reach the backend before synthesize() so the
+    // multimodal outline prompt has doc_summary and image metadata available.
+    if (contextUploadQueue.length) {
+      elements.generateBtn.textContent = `Uploading ${contextUploadQueue.length} file(s)...`;
+      await flushContextUploads(state.sessionId);
+      // Collapse the panel — files are now committed to the session
+      document.getElementById('context-upload-panel')?.classList.add('hidden');
+    }
+
+    elements.generateBtn.textContent = 'Uploading topic...';
     await uploadText(state.sessionId, prompt, 'topic');
-    
+
     elements.generateBtn.textContent = 'Synthesizing...';
     await synthesize(state.sessionId);
 

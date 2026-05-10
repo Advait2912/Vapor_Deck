@@ -34,9 +34,14 @@ class InputUnit(BaseModel):
 
     # Vision / design signals (images only)
     visual_summary: str | None = None
+    content_description: str | None = None  # what the image SHOWS semantically (for outline assignment)
+    style_keywords: list[str] = []          # semantic tags from vision analysis
     layout_hints: list[str] = []
     color_palette: list[str] = []           # hex colors
     font_hints: list[str] = []
+
+    # Document semantic summary (documents only — produced once at upload time)
+    doc_summary: dict | None = None         # {"summary": str, "key_topics": [...], "key_facts": [...]}
 
     # Instruction role only
     instructions_parsed: list[str] = []    # clean bullet-point rules

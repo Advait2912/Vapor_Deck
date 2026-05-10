@@ -75,6 +75,17 @@
               <div id="chat-history" class="chat-history">
                 <!-- Messages injected here -->
               </div>
+
+              <!-- Context Upload Panel (images + docs before outline generation) -->
+              <div id="context-upload-panel" class="context-upload-panel">
+                <div id="context-drop-zone" class="context-drop-zone" title="Upload images or documents to ground your presentation">
+                  <span class="context-drop-icon">⊕</span>
+                  <span class="context-drop-label">Add context <span class="context-drop-hint">images · PDF · DOCX</span></span>
+                  <input id="context-file-input" type="file" accept="image/*,.pdf,.docx,.doc" multiple style="display:none;" />
+                </div>
+                <div id="context-file-pills" class="context-file-pills"></div>
+              </div>
+
               <div class="input-row">
                 <textarea id="prompt-input" class="cmd-input" placeholder="Describe a topic, add slides, or refine the outline..." rows="1"></textarea>
                 <input

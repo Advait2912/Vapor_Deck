@@ -227,12 +227,12 @@ def _build_asset_section(filenames: list[str] | None) -> str:
         return ""
     
     asset_lines = [
-        "=== AVAILABLE LOCAL ASSETS ===",
-        "These images are stored locally in the project's assets/ folder.",
-        "To include one in this slide, use exactly: <img src=\"/assets/filename\">",
-        "Only use an image if it is directly relevant to this slide's content.",
+        "=== MANDATORY LOCAL ASSETS ===",
+        "These specific images have been assigned to THIS slide for grounding.",
+        "You MUST include them in your layout using exactly: <img src=\"/assets/filename\">",
+        "Integrate them elegantly into the design (e.g., as a hero image, in a feature card, or as a floating visual artifact).",
         "",
-        "Available filenames:"
+        "Available filenames to render:"
     ]
     for f in filenames:
         asset_lines.append(f" - {f}")
