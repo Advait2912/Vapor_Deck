@@ -97,7 +97,7 @@ export function updateUI() {
 
   // Always show the Detail/Overview toggle whenever an outline exists
   const toggle = document.getElementById('info-view-toggle');
-  if (toggle) toggle.style.display = state.outline.length ? 'flex' : 'none';
+  if (toggle) toggle.style.display = (state.outline && state.outline.length) ? 'flex' : 'none';
 
   if (inSlidePhase) {
     elements.refinePanel.style.display = 'block';
@@ -118,11 +118,16 @@ export function updateUI() {
 
   // Generate Button label in Plan Mode
   if (isPlan) {
-    elements.promptInput.disabled = false;
-    if (status === 'IDLE') {
-      elements.generateBtn.textContent = 'Generate Outline';
+    if (status === 'IDLE' || status === 'ERROR') {
+      elements.promptInput.disabled = false;
+      if (status === 'ERROR') {
+        elements.generateBtn.textContent = state.outline.length > 0 ? 'Retry Message' : 'Retry Generation';
+      } else {
+        elements.generateBtn.textContent = 'Generate Outline';
+      }
       elements.generateBtn.disabled = false;
     } else if (status === 'REVIEWING_OUTLINE' || status === 'GENERATING' || status === 'DONE' || status === 'REVIEWING') {
+      elements.promptInput.disabled = false;
       elements.generateBtn.textContent = 'Send Message';
       elements.generateBtn.disabled = false;
     } else if (['SYNTHESIZING', 'OUTLINING', 'PLANNING'].includes(status)) {
@@ -213,7 +218,11 @@ export function renderChatMessage(role, text, target = elements.chatHistory) {
   roleSpan.textContent = role === 'user' ? 'You' : 'VaporDeck';
   
   const textDiv = document.createElement('div');
-  textDiv.textContent = text;
+  // Simple markdown-ish parsing for bold and newlines
+  const html = text
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  textDiv.innerHTML = html;
   
   msgDiv.appendChild(roleSpan);
   msgDiv.appendChild(textDiv);

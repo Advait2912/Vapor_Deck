@@ -124,15 +124,16 @@ async def synthesize(session_id: str):
 
     try:
         ctx = await synthesize_context(session, model)
+        session.deck_context = ctx
+        session.topic = ctx.get("topic", "")
+        session.hard_constraints = ctx.get("hard_constraints", [])
+        session.status = "synthesized"
+        save_session(session)
     except Exception as e:
+        session.status = "idle"  # Reset to previous stable state
+        save_session(session)
         logger.error(f"[{session_id}] synthesis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Context synthesis failed: {e}")
-
-    session.deck_context = ctx
-    session.topic = ctx.get("topic", "")
-    session.hard_constraints = ctx.get("hard_constraints", [])
-    session.status = "synthesized"
-    save_session(session)
 
     return {
         "status": "ok",
@@ -204,13 +205,13 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
         with open(f"debug/outline_prompt_{session_id[:8]}.txt", "w") as f:
             f.write(prompt)
 
-    raw_outline = await collect_stream(
-        model,
-        [{"role": "user", "content": prompt}],
-        OUTLINE_SYSTEM,
-    )
-
     try:
+        raw_outline = await collect_stream(
+            model,
+            [{"role": "user", "content": prompt}],
+            OUTLINE_SYSTEM,
+        )
+
         cleaned = strip_fences(raw_outline)
         if not cleaned.startswith("[") or not cleaned.endswith("]"):
             # Try to find array within the text if model added chatter
@@ -231,13 +232,17 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
             outline_item.assigned_images = list(assigned_images)
             parsed_items.append(outline_item)
         session.outline = parsed_items
-    except Exception as e:
-        logger.error(f"[{session_id}] outline parse failed: {e}")
-        logger.debug(f"[{session_id}] raw_outline: {raw_outline[:1000]}")
-        raise HTTPException(status_code=500, detail=f"Outline JSON parse failed: {e}")
+        
+        session.status = "reviewing_outline"
+        save_session(session)
 
-    session.status = "reviewing_outline"
-    save_session(session)
+    except Exception as e:
+        session.status = "synthesized"  # Reset to previous stable state
+        save_session(session)
+        logger.error(f"[{session_id}] outline generation failed: {e}")
+        if not isinstance(e, json.JSONDecodeError):
+             logger.debug(f"[{session_id}] raw_outline: {locals().get('raw_outline', 'N/A')[:1000]}")
+        raise HTTPException(status_code=500, detail=f"Outline generation failed: {e}")
 
     return {
         "session_id": session_id,

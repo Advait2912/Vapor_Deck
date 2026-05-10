@@ -95,6 +95,9 @@ async def session_chat(session_id: str, req: ChatRequest):
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Allow chat in any mode to enable fluid additions/refinements
+    previous_status = session.status
+    session.status = "outlining"
+    save_session(session)
 
     model = get_model(session.text_model)
     
@@ -193,6 +196,7 @@ async def session_chat(session_id: str, req: ChatRequest):
             elif slide.title in title_to_new_index:
                 slide.index = title_to_new_index[slide.title]
         
+        session.status = "reviewing_outline"
         save_session(session)
         return {
             "status": "ok", 
@@ -202,6 +206,8 @@ async def session_chat(session_id: str, req: ChatRequest):
         }
         
     except Exception as e:
+        session.status = previous_status
+        save_session(session)
         import traceback
         logger.error(f"[{session_id}] chat failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

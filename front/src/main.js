@@ -85,7 +85,7 @@ let infoView = 'detail'; // 'detail' | 'overview'
 
 function refreshInfoPanel() {
   const toggle = document.getElementById('info-view-toggle');
-  if (toggle && state.outline.length) toggle.style.display = 'flex';
+  if (toggle && state.outline && state.outline.length) toggle.style.display = 'flex';
   if (infoView === 'overview') {
     renderOutlineContentSummary(elements.infoList);
   } else {
@@ -758,6 +758,12 @@ async function startGeneration(prompt) {
     updateUI();
     elements.generateBtn.disabled = false;
     elements.promptInput.disabled = false;
+    
+    const errMsg = error.message || 'Unknown error';
+    const friendlyMsg = `⚠️ **Deck initialization failed.**\n\nIt looks like the AI backend couldn't process your request. This is often because the Ollama server is offline or busy.\n\n**Error Details:** ${errMsg}\n\n*Please ensure Ollama is running and try clicking 'Retry Generation' below.*`;
+    
+    state.messages.push({ role: 'ai', text: friendlyMsg });
+    renderChatMessage('ai', friendlyMsg);
   }
 }
 
@@ -851,8 +857,14 @@ async function handlePlanChat(message) {
   } catch (error) {
     if (error?.name === 'AbortError') return;
     console.error('Plan chat failed:', error);
-    state.status = 'REVIEWING_OUTLINE';
+    state.status = 'ERROR';
     updateUI();
+    
+    const errMsg = error.message || 'Unknown error';
+    const friendlyMsg = `⚠️ **Planning update failed.**\n\nI couldn't update the outline. This might be due to a temporary connection issue with the AI server.\n\n**Error Details:** ${errMsg}\n\n*You can try sending your message again.*`;
+
+    state.messages.push({ role: 'ai', text: friendlyMsg });
+    renderChatMessage('ai', friendlyMsg);
   }
 }
 
