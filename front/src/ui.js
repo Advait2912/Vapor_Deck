@@ -40,6 +40,7 @@ export const elements = {
   planInteraction: document.getElementById('plan-interaction'),
   chatHistory: document.getElementById('chat-history'),
   buildInteraction: document.getElementById('build-interaction'),
+  buildChatHistory: document.getElementById('build-chat-history'),
   // Mode pill buttons
   modePillPlan: document.getElementById('interaction-mode-plan'),
   modePillBuild: document.getElementById('interaction-mode-build'),
@@ -146,6 +147,11 @@ export function updateUI() {
 
   // Refresh Vision Indicator for current slide
   refreshVisionIndicator();
+
+  // Refresh Build Mode Chat
+  if (isBuild) {
+    renderBuildHistory(state.currentIndex);
+  }
 }
 
 function getSlideId(index) {
@@ -229,6 +235,68 @@ export function renderChatMessage(role, text, target = elements.chatHistory) {
   target.appendChild(msgDiv);
   
   target.scrollTop = target.scrollHeight;
+}
+
+/**
+ * Render the refinement history for a specific slide in Build Mode
+ */
+export function renderBuildHistory(index) {
+  const item = state.outline[index];
+  if (!item || !elements.buildChatHistory) return;
+
+  const slide = state.slides.find(s => s.id === item.id);
+  const audit = state.slideAudits[item.id];
+  
+  elements.buildChatHistory.innerHTML = '';
+
+  // 1. Initial "AI Generated" message
+  if (slide) {
+    renderChatMessage('ai', `Slide <strong>"${item.title}"</strong> successfully generated and approved.`, elements.buildChatHistory);
+  } else {
+    renderChatMessage('ai', `Select or build slide <strong>"${item.title}"</strong> to begin refinement.`, elements.buildChatHistory);
+  }
+
+  // 2. Vision Audit Alert (if exists and has issues)
+  if (audit && audit.verdict !== 'good') {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `chat-message ai-msg vision-alert ${audit.verdict}`;
+    
+    let verdictLabel = audit.verdict === 'fixable' ? 'MINOR LAYOUT ISSUES' : 'SIGNIFICANT LAYOUT ISSUES';
+    if (audit.verdict === 'audit_failed') verdictLabel = 'AUDIT FAILED';
+
+    alertDiv.innerHTML = `
+      <div class="msg-role">Vision Audit</div>
+      <div style="color: var(--text-main);">
+        <strong>${verdictLabel}</strong>: ${audit.visual_issues?.join(', ') || 'Unknown error'}
+        ${audit.refine_prompt ? `
+          <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.8rem;">
+            <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Recommended Fix</div>
+            ${audit.refine_prompt}
+            <button class="btn primary magic-fix-btn" style="margin-top: 8px; width: 100%; font-size: 0.75rem;">Apply Magic Fix ✦</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    elements.buildChatHistory.appendChild(alertDiv);
+
+    // Wire up magic fix button
+    const fixBtn = alertDiv.querySelector('.magic-fix-btn');
+    if (fixBtn) {
+      fixBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix', { detail: { index, prompt: audit.refine_prompt } }));
+      };
+    }
+  }
+
+  // 3. User Refinements History
+  if (slide && slide.refinements && slide.refinements.length) {
+    slide.refinements.forEach(instruction => {
+      renderChatMessage('user', instruction, elements.buildChatHistory);
+      renderChatMessage('ai', 'Refinement applied successfully.', elements.buildChatHistory);
+    });
+  }
+
+  elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
 }
 
 /**

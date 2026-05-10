@@ -649,7 +649,7 @@ footer {
 }
 
 /* Chat History */
-#chat-history {
+#chat-history, #design-chat-history, #build-chat-history {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -721,7 +721,54 @@ footer {
 
 .user-msg .msg-role { color: var(--accent); }
 #design-chat-history .user-msg .msg-role { color: #10b981; }
+#build-chat-history .user-msg .msg-role { color: #f59e0b; }
 .ai-msg .msg-role { color: var(--text-muted); }
+
+/* Vision Alerts in Chat */
+.vision-alert {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 2px solid #fbbf24;
+  margin: 4px 0;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.vision-alert:hover {
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.vision-alert.regenerate {
+  border-left-color: #ef4444;
+}
+
+.vision-alert.fixable {
+  border-left-color: #f59e0b;
+}
+
+.vision-alert .msg-role {
+  color: #fbbf24;
+  font-weight: 800;
+}
+
+.magic-fix-btn {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.magic-fix-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+  filter: brightness(1.1);
+}
+
+.magic-fix-btn:active {
+  transform: translateY(0);
+}
 /* Vision Indicator */
 .vision-indicator {
   position: absolute;

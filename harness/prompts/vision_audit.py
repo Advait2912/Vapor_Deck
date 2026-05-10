@@ -40,38 +40,46 @@ Theme: {theme}
 Style Intent: {style_intent}
 
 === YOUR TASK ===
-Look at the attached screenshot carefully AND inspect the HTML. Check for these specific issues:
+Look at the attached screenshot carefully. The screenshot is the GROUND TRUTH — if the screenshot looks broken, the slide is broken, regardless of the HTML code. 
 
-1. OVERFLOW / SCROLLABLE BOXES (CRITICAL): Look at the HTML for any element with `overflow-y: auto`, `overflow-y: scroll`, or `overflow: auto`. If found, this is ALWAYS a "fixable" issue — content must never require scrolling on a slide. Also check if any content boxes appear clipped or cut off at the bottom of the slide.
-2. CLIPPED: Text or elements partially cut off at the slide's outer edges
-3. TOO MUCH CONTENT: If a column or section has more than 4 bullet points, or if bullet text is paragraph-length (more than ~15 words per point), report it as "fixable".
-4. UNREADABLE CODE: Code blocks that are too small, overflow, or have poor contrast
-5. BAD SPACE UTILIZATION: Content that is too small and "lost" in empty space, OR areas that are severely cramped
-6. FONT SIZE: Body text that is too small to comfortably read from a distance
-7. VISUAL BALANCE: Elements misaligned, off-center without purpose, or a lopsided layout
-8. CONTRAST: Text that is hard to read against the background
-9. WRAPPING: Headings or key labels wrapping awkwardly mid-word or splitting unevenly
+Check for these specific issues:
+
+1. OVERFLOW / SCROLLABLE BOXES (CRITICAL): Look at the HTML for any element with `overflow-y: auto`, `overflow-y: scroll`, or `overflow: auto`. Slide content must NEVER require scrolling. If found, this is ALWAYS at least "fixable".
+2. CLIPPED CONTENT: Look at the edges of the 1280x720 canvas. Are text or elements partially cut off? Even a few pixels count.
+3. OFF-CENTER / LOPSIDED: Is the content awkwardly shifted to one side? Is there a massive empty void (more than 40% of the slide) on one side while the other side is cramped? This is a major failure.
+4. TOO MUCH CONTENT: More than 4-5 bullet points, or paragraph-length points (more than ~15 words) are "fixable" — they should be split.
+5. UNREADABLE CODE: Code blocks that are too small, overflow, or have poor contrast.
+6. FONT SIZE: Body text must be large enough to read. Tiny text is "fixable".
+7. VISUAL BALANCE: Elements misaligned or floating in awkward positions.
+8. CONTRAST: Text hard to read against the background.
+9. WRAPPING: Awkward line breaks (e.g., a single word on a new line, or split words).
 
 Return ONLY this JSON (no extra text):
 {{
   "verdict": "good" | "fixable" | "regenerate",
-  "visual_issues": ["concise list of specific problems found, or empty array"],
-  "refine_prompt": "A single, specific instruction for a developer to fix the issues. Start with 'Fix:'. Be concrete — mention element names, CSS properties, and values where possible. Example: 'Fix: The right column text is wrapping at narrow widths. Set min-width: 300px on .right-col and reduce font-size from 1.1rem to 0.95rem.' Set to null if verdict is good.",
+  "visual_issues": ["concise list of specific problems found"],
+  "refine_prompt": "A concrete instruction to fix the issues. Example: 'Fix: The content is shifted too far right. Center the .main-container and add padding-left: 5vw.'",
   "has_overflow": false,
   "has_clipped_content": false,
   "has_unreadable_code": false,
   "has_bad_spacing": false,
   "has_empty_regions": false,
   "has_contrast_issues": false,
-  "has_wrapping_issues": false
+  "has_wrapping_issues": false,
+  "has_lopsided_layout": false
 }}
 
 VERDICT RULES:
-- "good": No significant issues. Slide is clean, professional, and fills the space elegantly.
-- "fixable": 1-3 minor issues (spacing, font size, alignment, wrapping) that can be fixed with targeted CSS tweaks.
-- "regenerate": Major structural failures: severe overflow, entire layout broken, content completely illegible, more than 60%% of slide space is wasted, or if the slide appears to have failed to load assets (e.g., text is in a generic fallback font when it should be styled, or images/icons are missing).
+- "good": Slide is professional, balanced, and fills the space elegantly.
+- "fixable": Minor issues (spacing, font size, small alignment tweaks) that can be fixed with 1-2 CSS properties.
+- "regenerate": MAJOR failures: 
+    - Severe clipping (text cut off mid-sentence).
+    - Massive empty voids (e.g., entire left half is empty).
+    - Content completely off-canvas.
+    - Broken layout (elements overlapping).
+    - Failure to load assets (generic fonts, missing icons).
 
-CRITICAL: Be CONSERVATIVE about "regenerate" — only use it for truly broken layouts. Minor issues should be "fixable". A slide with two columns where one has slightly more content than the other is "good".
+CRITICAL: Be CONSERVATIVE about "regenerate" for minor spacing issues, but be AGGRESSIVE about "regenerate" for severe clipping or massive lopsidedness.
 """
 
 

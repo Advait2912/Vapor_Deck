@@ -83,6 +83,7 @@ async def _run_vision_audit(
             has_empty_regions=data.get("has_empty_regions", False),
             has_contrast_issues=data.get("has_contrast_issues", False),
             has_wrapping_issues=data.get("has_wrapping_issues", False),
+            has_lopsided_layout=data.get("has_lopsided_layout", False),
             snapshot_b64=screenshot_b64,
         )
 

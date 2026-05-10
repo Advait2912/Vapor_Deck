@@ -5,7 +5,7 @@ import httpx
 
 from ..base import BaseProvider
 
-OLLAMA_BASE = "http://localhost:11434"
+OLLAMA_BASE = "http://134.199.192.134:11434"
 
 
 class OllamaProvider(BaseProvider):
@@ -37,7 +37,7 @@ class OllamaProvider(BaseProvider):
             ],
             "stream": True,
             "options": {
-                "num_ctx": 16384  # Adjusted for text models
+                "num_ctx": 32768  # Coding agent context length
             }
         }
 
@@ -66,10 +66,10 @@ class OllamaProvider(BaseProvider):
         Falls back to text-only if model doesn't support images.
         """
         # BUG: gemma4:31b-cloud is text-only and crashes Ollama with 500 if images are sent.
-        # Auto-fallback to ministral for vision if gemma is selected.
+        # Auto-fallback to qwen3-vl for vision if gemma is selected.
         effective_model = self.model
         if "gemma4" in self.model:
-            effective_model = "ministral-3:14b-cloud"
+            effective_model = "qwen3-vl:235b-cloud"
 
         payload = {
             "model": effective_model,
@@ -80,10 +80,10 @@ class OllamaProvider(BaseProvider):
             }],
             "stream": False,
             "options": {
-                "num_ctx": 8192  # Adjusted for vision models
+                "num_ctx": 16384  # Vision context length
             }
         }
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:
             resp = await client.post(f"{OLLAMA_BASE}/api/chat", json=payload)
             resp.raise_for_status()
             return resp.json()["message"]["content"]

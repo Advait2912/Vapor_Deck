@@ -404,6 +404,11 @@ async function init() {
       _runVisionAuditInBackground(state.currentIndex, state.currentIndex + 1, state.currentSlideHtml);
     });
   }
+
+  // Handle Magic Fix event from UI
+  window.addEventListener('magic-fix', (e) => {
+    startRefinement('visual_fix', e.detail.prompt);
+  });
 }
 
 function _wireComparisonButtons() {
@@ -460,7 +465,7 @@ async function _streamRefinementIntoComparisonRight() {
       state.currentIndex + 1,
       'refine',
       {
-        refineMode: 'expand',
+        refineMode: 'general',
         currentHtml,
         instruction: elements.refineInstructionInput?.value?.trim() || '',
       },
@@ -961,6 +966,11 @@ function navigateToSlide(index) {
   mountPlaceholder(elements.slideIframe, `Slide ${index + 1} not built yet. Click ✧ to generate.`);
   renderOutline(navigateToSlide);
   updateUI();
+  
+  // Ensure we scroll to the bottom of the build history when switching slides
+  if (elements.buildChatHistory) {
+    elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
+  }
 }
 
 // ── Slide Generation ─────────────────────────────────────────────────────────────
@@ -1515,10 +1525,21 @@ function regenerateCurrentSlide() {
 }
 
 async function customRegenerateWithPrompt() {
-  const instruction = elements.refineInstructionInput?.value?.trim();
   const id = getSlideId(state.currentIndex);
+  const slideData = state.slides.find(s => s.id === id);
+  
+  let instruction = elements.refineInstructionInput?.value?.trim();
+  let mode = 'general'; // Default mode for custom regeneration
+
+  // If instruction is empty, check if there's a vision audit recommendation
+  if (!instruction && slideData?.audit?.refine_prompt) {
+    instruction = `Magic Fix: ${slideData.audit.refine_prompt}`;
+    mode = 'visual_fix';
+  }
+
+  if (!instruction) return;
   const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
-  if (!currentHtml?.trim() || !instruction) return;
+  if (!currentHtml?.trim()) return;
 
   if (activeSlideControllers.has(state.currentIndex)) {
     activeSlideControllers.get(state.currentIndex).abort();
@@ -1534,23 +1555,29 @@ async function customRegenerateWithPrompt() {
   elements.refineInstructionInput.value = '';
   elements.refineInstructionInput.style.height = 'auto';
 
-  state.slides = state.slides.filter(s => id ? s.id !== id : s.index !== index);
   state.status = 'GENERATING';
   if (id) {
     state.generatingSlides[id] = true;
     state.promptApplyingSlides[id] = true;
+    
+    // Add to refinements history for conversational continuity
+    if (!state.slides.find(s => s.id === id).refinements) {
+      state.slides.find(s => s.id === id).refinements = [];
+    }
+    state.slides.find(s => s.id === id).refinements.push(instruction);
   }
+  
   refreshOutline();
   updateUI();
   persistSessionViewState();
-  mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${slideNum}...`);
+  mountPlaceholder(elements.slideIframe, `Applying refinement to Slide ${slideNum}...`);
   if (index === state.currentIndex) showLoadingBar();
 
   let regenerated = '';
   activeRefineController = new AbortController();
   try {
     const stream = streamSlide(state.sessionId, id, 'refine', {
-      refineMode: 'expand',
+      refineMode: mode,
       currentHtml,
       instruction,
     }, activeRefineController.signal);
@@ -1567,6 +1594,10 @@ async function customRegenerateWithPrompt() {
       state.draftSlides[id] = regenerated;
       state.latestSlides[id] = regenerated;
       delete state.promptApplyingSlides[id];
+      
+      // Update the approved slide html too
+      const s = state.slides.find(s => s.id === id);
+      if (s) s.html = regenerated;
     }
     if (state.currentIndex === index) {
       hideLoadingBar();
@@ -1584,7 +1615,7 @@ async function customRegenerateWithPrompt() {
       state.status = 'ERROR';
       if (id) delete state.promptApplyingSlides[id];
       if (state.currentIndex === index) {
-        mountPlaceholder(elements.slideIframe, `Custom regenerate failed: ${error.message}`);
+        mountPlaceholder(elements.slideIframe, `Refinement failed: ${error.message}`);
       }
     } else {
       if (id) delete state.promptApplyingSlides[id];
