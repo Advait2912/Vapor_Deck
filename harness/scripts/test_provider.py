@@ -53,8 +53,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test an AI provider")
     parser.add_argument(
         "--model",
-        default="google/gemini-2.0-flash",
-        help="Model string, e.g. 'google/gemini-2.0-flash' or 'ollama/llama3.1:8b'",
+        default="ollama/gemma4:31b",
+        help="Model string, e.g. 'ollama/gemma4:31b' or 'ollama/qwen3-vl:32b'",
     )
     args = parser.parse_args()
     asyncio.run(test(args.model))

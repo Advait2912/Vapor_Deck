@@ -1,11 +1,12 @@
 import json
+import os
 from typing import AsyncIterator
 
 import httpx
 
 from ..base import BaseProvider
 
-OLLAMA_BASE = "http://134.199.192.134:11434"
+OLLAMA_BASE = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 
 class OllamaProvider(BaseProvider):
@@ -65,11 +66,11 @@ class OllamaProvider(BaseProvider):
         Requires a vision-capable Ollama model (e.g. llava:13b).
         Falls back to text-only if model doesn't support images.
         """
-        # BUG: gemma4:31b-cloud is text-only and crashes Ollama with 500 if images are sent.
+        # BUG: gemma4:31b is text-only and crashes Ollama with 500 if images are sent.
         # Auto-fallback to qwen3-vl for vision if gemma is selected.
         effective_model = self.model
-        if "gemma4" in self.model:
-            effective_model = "qwen3-vl:235b-cloud"
+        if "gemma" in self.model:
+            effective_model = "qwen3-vl:32b"
 
         payload = {
             "model": effective_model,

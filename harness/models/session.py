@@ -38,8 +38,8 @@ class DeckSession(BaseModel):
     mode: str = "plan"  # plan | build
 
     # Model config
-    text_model: str = "ollama/deepseek-v4-flash:cloud"
-    vision_model: str = "ollama/qwen3-vl:235b-cloud"
+    text_model: str = "ollama/gemma4:31b"
+    vision_model: str = "ollama/qwen3-vl:32b"
     theme: str = "dark-tech"
 
     # ── Input layer ────────────────────────────────────────────────────────────
