@@ -27,6 +27,9 @@ for key, label in CHECKED_KEYS.items():
     if not os.getenv(key):
         _logger.warning(f"⚠️  {key} not set — {label} will fail at runtime")
 
+ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+_logger.info(f"🚀 Ollama provider configured to use: {ollama_host}")
+
 app = FastAPI(
     title="AI Slide Generator",
     version="0.2.0",
@@ -90,17 +93,11 @@ def list_models():
     """List available model strings for the frontend model picker."""
     return {
         "text_models": [
-            # {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
-            # {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
-            # {"id": "google/gemma-4", "label": "Gemma 4 (Google)", "provider": "google"},
-            {"id": "ollama/gemma4:31b-cloud", "label": "Gemma 4 31B (cloud)", "provider": "ollama"},
+            {"id": "ollama/gemma4:31b", "label": "Gemma 4 31B (AMD GPU)", "provider": "ollama"},
             {"id": "ollama/llama3.1:8b", "label": "Llama 3.1 8B (local)", "provider": "ollama"},
-            {"id": "ollama/mistral", "label": "Mistral 7B (local)", "provider": "ollama"},
         ],
         "vision_models": [
-            # {"id": "google/gemini-2.0-flash", "label": "Gemini 2.0 Flash (Google)", "provider": "google"},
-            # {"id": "google/gemini-1.5-pro", "label": "Gemini 1.5 Pro (Google)", "provider": "google"},
-            {"id": "ollama/gemma4:31b-cloud", "label": "Gemma 4 31B (cloud)", "provider": "ollama"},
+            {"id": "ollama/qwen3-vl:32b", "label": "Qwen 3 VL 32B (AMD GPU)", "provider": "ollama"},
         ],
     }
 

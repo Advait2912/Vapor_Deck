@@ -53,8 +53,8 @@ def sync_session_indices(session: DeckSession):
 # ── Request models ─────────────────────────────────────────────────────────────
 
 class CreateSessionRequest(BaseModel):
-    text_model: str = "ollama/gemma4:31b-cloud"
-    vision_model: str = "ollama/ministral-3:14b-cloud"
+    text_model: str = "ollama/gemma4:31b"
+    vision_model: str = "ollama/qwen3-vl:32b"
     theme: str = "dark-tech"
 
 
