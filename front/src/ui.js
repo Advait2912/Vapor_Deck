@@ -77,6 +77,11 @@ export function updateUI() {
     dot.style.boxShadow = '0 0 8px #10b981';
   }
 
+  // Ensure model select is in sync with state
+  if (elements.modelSelect && state.model) {
+    elements.modelSelect.value = state.model;
+  }
+
   // ── Mode-based visibility ──────────────────────────────────────────────────
   const isPlan = state.mode === 'plan';
   const isDesign = state.mode === 'design';
@@ -264,26 +269,55 @@ export function renderBuildHistory(index) {
     let verdictLabel = audit.verdict === 'fixable' ? 'MINOR LAYOUT ISSUES' : 'SIGNIFICANT LAYOUT ISSUES';
     if (audit.verdict === 'audit_failed') verdictLabel = 'AUDIT FAILED';
 
+    let actionUI = '';
+    if (slide?.magicFixing) {
+      actionUI = `<div style="margin-top: 8px; padding: 8px; text-align: center; background: rgba(59,130,246,0.1); border: 1px dashed var(--accent); border-radius: 4px; color: var(--accent); font-size: 0.75rem;">Applying Magic Fix... ✦</div>`;
+    } else if (slide?.pendingMagicFix) {
+      actionUI = `
+        <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px;">
+          <div style="margin-bottom: 8px; font-size: 0.75rem;">✨ <strong>Magic Fix applied.</strong></div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn primary keep-btn" style="flex: 1; font-size: 0.75rem;">Keep</button>
+            <button class="btn revert-btn" style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); font-size: 0.75rem;">Revert</button>
+          </div>
+        </div>
+      `;
+    } else if (audit.refine_prompt) {
+      actionUI = `
+        <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.8rem;">
+          <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Recommended Fix</div>
+          ${audit.refine_prompt}
+          <button class="btn primary magic-fix-btn" style="margin-top: 8px; width: 100%; font-size: 0.75rem;">Apply Magic Fix ✦</button>
+        </div>
+      `;
+    }
+
     alertDiv.innerHTML = `
       <div class="msg-role">Vision Audit</div>
       <div style="color: var(--text-main);">
         <strong>${verdictLabel}</strong>: ${audit.visual_issues?.join(', ') || 'Unknown error'}
-        ${audit.refine_prompt ? `
-          <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.8rem;">
-            <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Recommended Fix</div>
-            ${audit.refine_prompt}
-            <button class="btn primary magic-fix-btn" style="margin-top: 8px; width: 100%; font-size: 0.75rem;">Apply Magic Fix ✦</button>
-          </div>
-        ` : ''}
+        ${actionUI}
       </div>
     `;
     elements.buildChatHistory.appendChild(alertDiv);
 
-    // Wire up magic fix button
+    // Wire up buttons
     const fixBtn = alertDiv.querySelector('.magic-fix-btn');
     if (fixBtn) {
       fixBtn.onclick = () => {
         window.dispatchEvent(new CustomEvent('magic-fix', { detail: { index, prompt: audit.refine_prompt } }));
+      };
+    }
+    const keepBtn = alertDiv.querySelector('.keep-btn');
+    if (keepBtn) {
+      keepBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix-keep', { detail: { index, slideId: slide.id, newHtml: slide.pendingMagicFix.newHtml } }));
+      };
+    }
+    const revertBtn = alertDiv.querySelector('.revert-btn');
+    if (revertBtn) {
+      revertBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix-revert', { detail: { index, slideId: slide.id, previousHtml: slide.pendingMagicFix.previousHtml } }));
       };
     }
   }

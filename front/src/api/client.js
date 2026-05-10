@@ -35,6 +35,12 @@ export async function getActiveSession() {
   return response.json();
 }
 
+export async function getModels() {
+  const response = await fetch(`${BASE_URL}/models`);
+  await ensureOk(response, 'Failed to get model list');
+  return response.json();
+}
+
 export async function deleteSession(sessionId) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}`, { method: 'DELETE' });
   await ensureOk(response, 'Failed to delete session');
@@ -206,7 +212,8 @@ export async function approveSlide(sessionId, slideId, html) {
  */
 export async function takeSnapshot(sessionId, slideId, html, snapshotB64 = null, id = null) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  // Large vision models (like qwen3-vl:235b) can take up to 5 minutes.
+  const timeoutId = setTimeout(() => controller.abort(), 360_000);
 
   try {
     const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideId}/snapshot`, {
@@ -230,7 +237,7 @@ export async function takeSnapshot(sessionId, slideId, html, snapshotB64 = null,
     if (err?.name === 'AbortError') {
       return {
         snapshot_b64: null,
-        audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 120 seconds'] },
+        audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 360 seconds'] },
         refine_prompt: null,
         auto_fixed: false,
       };

@@ -91,13 +91,16 @@ def get_active_session():
 @app.get("/api/models")
 def list_models():
     """List available model strings for the frontend model picker."""
+    text_model = os.getenv("VAPOR_TEXT_MODEL", "ollama/qwen3-coder-next:cloud")
+    vision_model = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
+    
     return {
         "text_models": [
-            {"id": "ollama/gemma4:31b", "label": "Gemma 4 31B (AMD GPU)", "provider": "ollama"},
+            {"id": text_model, "label": f"{text_model.split('/')[-1]} (Primary)", "provider": "ollama"},
             {"id": "ollama/llama3.1:8b", "label": "Llama 3.1 8B (local)", "provider": "ollama"},
         ],
         "vision_models": [
-            {"id": "ollama/qwen3-vl:32b", "label": "Qwen 3 VL 32B (AMD GPU)", "provider": "ollama"},
+            {"id": vision_model, "label": f"{vision_model.split('/')[-1]} (Primary)", "provider": "ollama"},
         ],
     }
 

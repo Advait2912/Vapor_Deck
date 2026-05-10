@@ -12,6 +12,9 @@ All existing routes preserved exactly as-is.
 import json
 import logging
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -53,8 +56,8 @@ def sync_session_indices(session: DeckSession):
 # ── Request models ─────────────────────────────────────────────────────────────
 
 class CreateSessionRequest(BaseModel):
-    text_model: str = "ollama/gemma4:31b"
-    vision_model: str = "ollama/qwen3-vl:32b"
+    text_model: str = os.getenv("VAPOR_TEXT_MODEL", "ollama/qwen3-coder-next:cloud")
+    vision_model: str = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
     theme: str = "dark-tech"
 
 

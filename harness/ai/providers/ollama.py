@@ -6,7 +6,7 @@ import httpx
 
 from ..base import BaseProvider
 
-OLLAMA_BASE = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_BASE = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
 
 class OllamaProvider(BaseProvider):
@@ -46,7 +46,14 @@ class OllamaProvider(BaseProvider):
             async with client.stream(
                 "POST", f"{OLLAMA_BASE}/api/chat", json=payload
             ) as resp:
-                resp.raise_for_status()
+                if resp.status_code != 200:
+                    try:
+                        err_json = await resp.json()
+                        err_msg = err_json.get("error", "Unknown error")
+                    except:
+                        err_msg = await resp.aread()
+                    raise Exception(f"Ollama Error {resp.status_code}: {err_msg} (model: {self.model})")
+                
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
@@ -66,11 +73,12 @@ class OllamaProvider(BaseProvider):
         Requires a vision-capable Ollama model (e.g. llava:13b).
         Falls back to text-only if model doesn't support images.
         """
-        # BUG: gemma4:31b is text-only and crashes Ollama with 500 if images are sent.
-        # Auto-fallback to qwen3-vl for vision if gemma is selected.
+        # BUG: gemma models are text-only and crash Ollama with 500 if images are sent.
+        # Auto-fallback to the configured vision model if gemma is selected.
         effective_model = self.model
         if "gemma" in self.model:
-            effective_model = "qwen3-vl:32b"
+            vision_env = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
+            effective_model = vision_env.split("/")[-1]
 
         payload = {
             "model": effective_model,
@@ -86,5 +94,11 @@ class OllamaProvider(BaseProvider):
         }
         async with httpx.AsyncClient(timeout=180.0) as client:
             resp = await client.post(f"{OLLAMA_BASE}/api/chat", json=payload)
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                try:
+                    err_json = resp.json()
+                    err_msg = err_json.get("error", "Unknown error")
+                except:
+                    err_msg = resp.text
+                raise Exception(f"Ollama Vision Error {resp.status_code}: {err_msg} (model: {effective_model})")
             return resp.json()["message"]["content"]

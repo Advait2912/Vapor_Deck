@@ -40,6 +40,7 @@ import {
   addOutlineSlide,
   retryAnalysis,
   sendDesignChat,
+  getModels,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -407,8 +408,64 @@ async function init() {
 
   // Handle Magic Fix event from UI
   window.addEventListener('magic-fix', (e) => {
-    startRefinement('visual_fix', e.detail.prompt);
+    applyMagicFixInBackground(e.detail.prompt);
   });
+
+  window.addEventListener('magic-fix-keep', (e) => {
+    const { index, slideId, newHtml } = e.detail;
+    const slide = state.slides.find(s => s.id === slideId);
+    if (slide) {
+      delete slide.pendingMagicFix;
+      updateUI();
+      _runVisionAuditInBackground(index, index + 1, newHtml);
+    }
+  });
+
+  window.addEventListener('magic-fix-revert', (e) => {
+    const { index, slideId, previousHtml } = e.detail;
+    const slide = state.slides.find(s => s.id === slideId);
+    
+    state.draftSlides[slideId] = previousHtml;
+    state.latestSlides[slideId] = previousHtml;
+    if (state.currentIndex === index) {
+      state.currentSlideHtml = previousHtml;
+      mountSlide(elements.slideIframe, previousHtml, state.theme, state.designConfig?.font_hints);
+    }
+    if (slide) {
+      slide.html = previousHtml;
+      if (slide.refinements?.length && slide.refinements[slide.refinements.length - 1].startsWith('Magic Fix:')) {
+        slide.refinements.pop();
+      }
+      delete slide.pendingMagicFix;
+    }
+    updateUI();
+    persistSessionViewState();
+    _runVisionAuditInBackground(index, index + 1, previousHtml);
+  });
+
+
+  // Fetch available models and update UI
+  try {
+    const modelData = await getModels();
+    if (typeof renderModels === 'function') {
+      renderModels(modelData);
+    } else {
+      // Inline fallback if renderModels couldn't be added to ui.js
+      if (elements.modelSelect) {
+        elements.modelSelect.innerHTML = '';
+        (modelData.text_models || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id; opt.textContent = m.label;
+          elements.modelSelect.appendChild(opt);
+        });
+      }
+      if (!state.model && modelData.text_models?.length) state.model = modelData.text_models[0].id;
+      if (!state.visionModel && modelData.vision_models?.length) state.visionModel = modelData.vision_models[0].id;
+      if (elements.modelSelect) elements.modelSelect.value = state.model;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch models:', err);
+  }
 }
 
 function _wireComparisonButtons() {
@@ -1117,10 +1174,15 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
     // Render into an isolated offscreen iframe — fully decoupled from the live preview.
     let snapshotB64 = null;
     try {
-      snapshotB64 = await captureHtmlOffscreen(html, state.theme);
+      // Add a strict 15-second timeout to the capture process to prevent silent hangs
+      snapshotB64 = await Promise.race([
+        captureHtmlOffscreen(html, state.theme),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('HTML capture timed out')), 15000))
+      ]);
     } catch (captureErr) {
       console.warn('Offscreen capture failed, proceeding without screenshot:', captureErr);
     }
+
 
     const result = await takeSnapshot(state.sessionId, id, html, snapshotB64, id);
 
@@ -1630,6 +1692,109 @@ async function customRegenerateWithPrompt() {
     persistSessionViewState();
   }
 }
+
+async function applyMagicFixInBackground(instruction) {
+  const id = getSlideId(state.currentIndex);
+  const slideData = state.slides.find(s => s.id === id);
+  if (!slideData) return;
+
+  const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
+  if (!currentHtml?.trim()) return;
+
+  if (activeSlideControllers.has(state.currentIndex)) {
+    activeSlideControllers.get(state.currentIndex).abort();
+  }
+  if (activeRefineController) activeRefineController.abort();
+
+  const index = state.currentIndex;
+  const slideNum = index + 1;
+  const runToken = sessionRunToken;
+  const jobId = beginSlideJob(index);
+
+  state.status = 'GENERATING';
+  state.generatingSlides[id] = true;
+  state.promptApplyingSlides[id] = true;
+  if (slideData) slideData.magicFixing = true;
+
+  refreshOutline();
+  updateUI();
+  persistSessionViewState();
+  mountPlaceholder(elements.slideIframe, `Applying Magic Fix...`);
+  if (index === state.currentIndex) showLoadingBar();
+
+  let regenerated = '';
+  activeRefineController = new AbortController();
+  try {
+    const stream = streamSlide(state.sessionId, id, 'refine', {
+      refineMode: 'visual_fix',
+      currentHtml,
+      instruction,
+    }, activeRefineController.signal);
+
+    for await (const token of stream) {
+      regenerated += token;
+    }
+
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    if (!regenerated.trim()) throw new Error('Empty regenerated slide');
+
+    // Success! Save the backup
+    const previousHtml = currentHtml;
+
+    state.draftSlides[id] = regenerated;
+    state.latestSlides[id] = regenerated;
+    delete state.promptApplyingSlides[id];
+    
+    if (slideData) slideData.html = regenerated;
+
+    // Record the fix in refinements
+    if (!slideData.refinements) slideData.refinements = [];
+    slideData.refinements.push(`Magic Fix: ${instruction}`);
+
+    if (slideData) {
+      slideData.magicFixing = false;
+      slideData.pendingMagicFix = { previousHtml, newHtml: regenerated };
+    }
+
+    if (state.currentIndex === index) {
+      hideLoadingBar();
+      state.currentSlideHtml = regenerated;
+      state.status = 'REVIEWING';
+      mountSlide(elements.slideIframe, regenerated, state.theme, state.designConfig?.font_hints);
+    }
+    
+    updateUI();
+    
+  } catch (error) {
+    if (!isLatestSlideJob(index, jobId)) return;
+    if (error?.name !== 'AbortError') {
+      console.error('Magic fix failed:', error);
+      state.status = 'ERROR';
+      if (id) delete state.promptApplyingSlides[id];
+      if (state.currentIndex === index) {
+        mountPlaceholder(elements.slideIframe, `Magic fix failed: ${error.message}`);
+      }
+      if (elements.buildChatHistory) {
+        const msg = document.createElement('div');
+        msg.className = 'chat-message ai-msg';
+        msg.innerHTML = `❌ Magic Fix failed: ${error.message}`;
+        elements.buildChatHistory.appendChild(msg);
+        elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
+      }
+    } else {
+      if (id) delete state.promptApplyingSlides[id];
+    }
+  } finally {
+    if (!isLatestSlideJob(index, jobId)) return;
+    activeRefineController = null;
+    if (id) delete state.generatingSlides[id];
+    if (slideData) slideData.magicFixing = false;
+    syncStatusFromState();
+    updateUI();
+    persistSessionViewState();
+  }
+}
+
 
 function stopAllGeneration() {
   sessionRunToken += 1;

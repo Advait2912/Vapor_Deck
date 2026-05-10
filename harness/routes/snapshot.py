@@ -36,9 +36,11 @@ async def take_snapshot(session_id: str, slide_id: str, req: SnapshotRequest):
     """
     Receive a frontend screenshot, run vision audit, persist slide, return result.
     """
+    logger.info(f"[{session_id}] Received snapshot request for slide {slide_id}. Starting audit...")
     try:
         session = get_session(session_id)
     except KeyError:
+
         raise HTTPException(status_code=404, detail="Session not found")
 
     if not req.html.strip():

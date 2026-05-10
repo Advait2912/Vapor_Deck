@@ -1,6 +1,10 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
 import uuid
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from .input_unit import InputUnit
 
@@ -38,8 +42,8 @@ class DeckSession(BaseModel):
     mode: str = "plan"  # plan | build
 
     # Model config
-    text_model: str = "ollama/gemma4:31b"
-    vision_model: str = "ollama/qwen3-vl:32b"
+    text_model: str = os.getenv("VAPOR_TEXT_MODEL", "ollama/qwen3-coder-next:cloud")
+    vision_model: str = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
     theme: str = "dark-tech"
 
     # ── Input layer ────────────────────────────────────────────────────────────
