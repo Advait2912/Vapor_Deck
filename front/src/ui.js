@@ -40,6 +40,7 @@ export const elements = {
   planInteraction: document.getElementById('plan-interaction'),
   chatHistory: document.getElementById('chat-history'),
   buildInteraction: document.getElementById('build-interaction'),
+  buildChatHistory: document.getElementById('build-chat-history'),
   // Mode pill buttons
   modePillPlan: document.getElementById('interaction-mode-plan'),
   modePillBuild: document.getElementById('interaction-mode-build'),
@@ -76,6 +77,11 @@ export function updateUI() {
     dot.style.boxShadow = '0 0 8px #10b981';
   }
 
+  // Ensure model select is in sync with state
+  if (elements.modelSelect && state.model) {
+    elements.modelSelect.value = state.model;
+  }
+
   // ── Mode-based visibility ──────────────────────────────────────────────────
   const isPlan = state.mode === 'plan';
   const isDesign = state.mode === 'design';
@@ -97,7 +103,7 @@ export function updateUI() {
 
   // Always show the Detail/Overview toggle whenever an outline exists
   const toggle = document.getElementById('info-view-toggle');
-  if (toggle) toggle.style.display = state.outline.length ? 'flex' : 'none';
+  if (toggle) toggle.style.display = (state.outline && state.outline.length) ? 'flex' : 'none';
 
   if (inSlidePhase) {
     elements.refinePanel.style.display = 'block';
@@ -118,11 +124,16 @@ export function updateUI() {
 
   // Generate Button label in Plan Mode
   if (isPlan) {
-    elements.promptInput.disabled = false;
-    if (status === 'IDLE') {
-      elements.generateBtn.textContent = 'Generate Outline';
+    if (status === 'IDLE' || status === 'ERROR') {
+      elements.promptInput.disabled = false;
+      if (status === 'ERROR') {
+        elements.generateBtn.textContent = state.outline.length > 0 ? 'Retry Message' : 'Retry Generation';
+      } else {
+        elements.generateBtn.textContent = 'Generate Outline';
+      }
       elements.generateBtn.disabled = false;
     } else if (status === 'REVIEWING_OUTLINE' || status === 'GENERATING' || status === 'DONE' || status === 'REVIEWING') {
+      elements.promptInput.disabled = false;
       elements.generateBtn.textContent = 'Send Message';
       elements.generateBtn.disabled = false;
     } else if (['SYNTHESIZING', 'OUTLINING', 'PLANNING'].includes(status)) {
@@ -141,6 +152,11 @@ export function updateUI() {
 
   // Refresh Vision Indicator for current slide
   refreshVisionIndicator();
+
+  // Refresh Build Mode Chat
+  if (isBuild) {
+    renderBuildHistory(state.currentIndex);
+  }
 }
 
 function getSlideId(index) {
@@ -213,13 +229,108 @@ export function renderChatMessage(role, text, target = elements.chatHistory) {
   roleSpan.textContent = role === 'user' ? 'You' : 'VaporDeck';
   
   const textDiv = document.createElement('div');
-  textDiv.textContent = text;
+  // Simple markdown-ish parsing for bold and newlines
+  const html = text
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  textDiv.innerHTML = html;
   
   msgDiv.appendChild(roleSpan);
   msgDiv.appendChild(textDiv);
   target.appendChild(msgDiv);
   
   target.scrollTop = target.scrollHeight;
+}
+
+/**
+ * Render the refinement history for a specific slide in Build Mode
+ */
+export function renderBuildHistory(index) {
+  const item = state.outline[index];
+  if (!item || !elements.buildChatHistory) return;
+
+  const slide = state.slides.find(s => s.id === item.id);
+  const audit = state.slideAudits[item.id];
+  
+  elements.buildChatHistory.innerHTML = '';
+
+  // 1. Initial "AI Generated" message
+  if (slide) {
+    renderChatMessage('ai', `Slide <strong>"${item.title}"</strong> successfully generated and approved.`, elements.buildChatHistory);
+  } else {
+    renderChatMessage('ai', `Select or build slide <strong>"${item.title}"</strong> to begin refinement.`, elements.buildChatHistory);
+  }
+
+  // 2. Vision Audit Alert (if exists and has issues)
+  if (audit && audit.verdict !== 'good') {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `chat-message ai-msg vision-alert ${audit.verdict}`;
+    
+    let verdictLabel = audit.verdict === 'fixable' ? 'MINOR LAYOUT ISSUES' : 'SIGNIFICANT LAYOUT ISSUES';
+    if (audit.verdict === 'audit_failed') verdictLabel = 'AUDIT FAILED';
+
+    let actionUI = '';
+    if (slide?.magicFixing) {
+      actionUI = `<div style="margin-top: 8px; padding: 8px; text-align: center; background: rgba(59,130,246,0.1); border: 1px dashed var(--accent); border-radius: 4px; color: var(--accent); font-size: 0.75rem;">Applying Magic Fix... ✦</div>`;
+    } else if (slide?.pendingMagicFix) {
+      actionUI = `
+        <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px;">
+          <div style="margin-bottom: 8px; font-size: 0.75rem;">✨ <strong>Magic Fix applied.</strong></div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn primary keep-btn" style="flex: 1; font-size: 0.75rem;">Keep</button>
+            <button class="btn revert-btn" style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); font-size: 0.75rem;">Revert</button>
+          </div>
+        </div>
+      `;
+    } else if (audit.refine_prompt) {
+      actionUI = `
+        <div style="margin-top: 8px; padding: 10px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); border-radius: 4px; font-size: 0.8rem;">
+          <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Recommended Fix</div>
+          ${audit.refine_prompt}
+          <button class="btn primary magic-fix-btn" style="margin-top: 8px; width: 100%; font-size: 0.75rem;">Apply Magic Fix ✦</button>
+        </div>
+      `;
+    }
+
+    alertDiv.innerHTML = `
+      <div class="msg-role">Vision Audit</div>
+      <div style="color: var(--text-main);">
+        <strong>${verdictLabel}</strong>: ${audit.visual_issues?.join(', ') || 'Unknown error'}
+        ${actionUI}
+      </div>
+    `;
+    elements.buildChatHistory.appendChild(alertDiv);
+
+    // Wire up buttons
+    const fixBtn = alertDiv.querySelector('.magic-fix-btn');
+    if (fixBtn) {
+      fixBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix', { detail: { index, prompt: audit.refine_prompt } }));
+      };
+    }
+    const keepBtn = alertDiv.querySelector('.keep-btn');
+    if (keepBtn) {
+      keepBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix-keep', { detail: { index, slideId: slide.id, newHtml: slide.pendingMagicFix.newHtml } }));
+      };
+    }
+    const revertBtn = alertDiv.querySelector('.revert-btn');
+    if (revertBtn) {
+      revertBtn.onclick = () => {
+        window.dispatchEvent(new CustomEvent('magic-fix-revert', { detail: { index, slideId: slide.id, previousHtml: slide.pendingMagicFix.previousHtml } }));
+      };
+    }
+  }
+
+  // 3. User Refinements History
+  if (slide && slide.refinements && slide.refinements.length) {
+    slide.refinements.forEach(instruction => {
+      renderChatMessage('user', instruction, elements.buildChatHistory);
+      renderChatMessage('ai', 'Refinement applied successfully.', elements.buildChatHistory);
+    });
+  }
+
+  elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
 }
 
 /**

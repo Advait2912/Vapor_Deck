@@ -12,6 +12,9 @@ All existing routes preserved exactly as-is.
 import json
 import logging
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -21,7 +24,7 @@ from models.session import DeckSession, OutlineItem
 from store.sessions import sessions, get_session, save_session, delete_session
 from services.stream_utils import collect_stream, strip_fences
 from services.context_synthesis import synthesize_context
-from prompts.outline import build_outline_prompt, OUTLINE_SYSTEM
+from prompts.outline import build_outline_prompt, build_multimodal_outline_prompt, OUTLINE_SYSTEM
 from prompts.context_update import initial_deck_context
 
 logger = logging.getLogger("session")
@@ -53,8 +56,8 @@ def sync_session_indices(session: DeckSession):
 # ── Request models ─────────────────────────────────────────────────────────────
 
 class CreateSessionRequest(BaseModel):
-    text_model: str = "ollama/gemma4:31b-cloud"
-    vision_model: str = "ollama/ministral-3:14b-cloud"
+    text_model: str = os.getenv("VAPOR_TEXT_MODEL", "ollama/qwen3-coder-next:cloud")
+    vision_model: str = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
     theme: str = "dark-tech"
 
 
@@ -124,15 +127,16 @@ async def synthesize(session_id: str):
 
     try:
         ctx = await synthesize_context(session, model)
+        session.deck_context = ctx
+        session.topic = ctx.get("topic", "")
+        session.hard_constraints = ctx.get("hard_constraints", [])
+        session.status = "synthesized"
+        save_session(session)
     except Exception as e:
+        session.status = "idle"  # Reset to previous stable state
+        save_session(session)
         logger.error(f"[{session_id}] synthesis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Context synthesis failed: {e}")
-
-    session.deck_context = ctx
-    session.topic = ctx.get("topic", "")
-    session.hard_constraints = ctx.get("hard_constraints", [])
-    session.status = "synthesized"
-    save_session(session)
 
     return {
         "status": "ok",
@@ -165,20 +169,52 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
     save_session(session)
 
     model = get_model(session.text_model)
-    prompt = build_outline_prompt(session.deck_context, session.theme, preferred_slides)
+
+    # ── Multimodal routing ───────────────────────────────────────────────────
+    # Detect whether the session has uploaded images or documents.
+    # Image extensions match those in upload.py IMAGE_EXTS.
+    IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif", "svg"}
+    DOC_EXTS   = {"pdf", "docx", "doc"}
+
+    image_units = [
+        u for u in session.input_units
+        if (u.input_type or "").lower() in IMAGE_EXTS
+    ]
+    doc_units = [
+        u for u in session.input_units
+        if (u.input_type or "").lower() in DOC_EXTS
+    ]
+
+    has_multimodal = bool(image_units or doc_units)
+
+    if has_multimodal:
+        logger.info(
+            f"[{session_id}] multimodal outline: "
+            f"{len(image_units)} image(s), {len(doc_units)} doc(s)"
+        )
+        prompt = build_multimodal_outline_prompt(
+            session.deck_context,
+            session.theme,
+            image_units=image_units,
+            doc_units=doc_units,
+            preferred_slides=preferred_slides,
+        )
+    else:
+        logger.info(f"[{session_id}] standard outline (no images/docs)")
+        prompt = build_outline_prompt(session.deck_context, session.theme, preferred_slides)
 
     if os.getenv("DEBUG_PROMPTS", "0") == "1":
         os.makedirs("debug", exist_ok=True)
         with open(f"debug/outline_prompt_{session_id[:8]}.txt", "w") as f:
             f.write(prompt)
 
-    raw_outline = await collect_stream(
-        model,
-        [{"role": "user", "content": prompt}],
-        OUTLINE_SYSTEM,
-    )
-
     try:
+        raw_outline = await collect_stream(
+            model,
+            [{"role": "user", "content": prompt}],
+            OUTLINE_SYSTEM,
+        )
+
         cleaned = strip_fences(raw_outline)
         if not cleaned.startswith("[") or not cleaned.endswith("]"):
             # Try to find array within the text if model added chatter
@@ -190,14 +226,26 @@ async def generate_outline(session_id: str, preferred_slides: int = 8):
         # Sanitize: Keep only printable chars and standard whitespace
         sanitized = "".join(c for c in cleaned if c.isprintable() or c in "\n\r\t")
         outline_data = json.loads(sanitized, strict=False)
-        session.outline = [OutlineItem(**item) for item in outline_data]
-    except Exception as e:
-        logger.error(f"[{session_id}] outline parse failed: {e}")
-        logger.debug(f"[{session_id}] raw_outline: {raw_outline[:1000]}")
-        raise HTTPException(status_code=500, detail=f"Outline JSON parse failed: {e}")
+        # Parse outline items — read assigned_images if present (multimodal path)
+        parsed_items = []
+        for item in outline_data:
+            # assigned_images is optional — defaults to [] for backward compat
+            assigned_images = item.pop("assigned_images", []) or []
+            outline_item = OutlineItem(**item)
+            outline_item.assigned_images = list(assigned_images)
+            parsed_items.append(outline_item)
+        session.outline = parsed_items
+        
+        session.status = "reviewing_outline"
+        save_session(session)
 
-    session.status = "reviewing_outline"
-    save_session(session)
+    except Exception as e:
+        session.status = "synthesized"  # Reset to previous stable state
+        save_session(session)
+        logger.error(f"[{session_id}] outline generation failed: {e}")
+        if not isinstance(e, json.JSONDecodeError):
+             logger.debug(f"[{session_id}] raw_outline: {locals().get('raw_outline', 'N/A')[:1000]}")
+        raise HTTPException(status_code=500, detail=f"Outline generation failed: {e}")
 
     return {
         "session_id": session_id,

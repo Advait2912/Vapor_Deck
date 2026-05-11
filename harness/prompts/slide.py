@@ -189,9 +189,10 @@ def build_slide_prompt(
     relevant_chunks: str = "",
     asset_filenames: list[str] | None = None,
     is_refinement: bool = False,
+    current_html: str | None = None,
+    refine_instruction: str | None = None,
 ) -> str:
-    # Summarize deck context (narrative / terms / facts) — brand signals are
-    # now handled by _build_brand_section, NOT included here to avoid duplication.
+    # Summarize deck context (narrative / terms / facts)
     ctx_summary  = _summarize_context(deck_context)
     key_points_str = "\n".join(f"- {p}" for p in key_points)
     guidance     = INTENT_GUIDANCE.get(intent, "Follow the intent as described.")
@@ -201,11 +202,9 @@ def build_slide_prompt(
     topic = synthesis.get("topic", deck_context.get("topic", ""))
     
     brand_section = _build_brand_section(design_config, theme, topic, is_refinement)
-
-    # Format the asset list section
     asset_section = _build_asset_section(asset_filenames)
 
-    return SLIDE_PROMPT.format(
+    prompt = SLIDE_PROMPT.format(
         n=n,
         total=total,
         title=title,
@@ -220,6 +219,15 @@ def build_slide_prompt(
         intent_guidance=guidance,
     )
 
+    if is_refinement:
+        prompt += "\n\n=== REFINEMENT MODE (SURGICAL UPDATES ONLY) ==="
+        prompt += "\nYou are refining an EXISTING slide. DO NOT rewrite everything unless necessary."
+        prompt += f"\n\nCURRENT SLIDE HTML:\n{current_html or 'No current HTML provided.'}"
+        prompt += f"\n\nUSER REFINEMENT INSTRUCTION:\n{refine_instruction or 'Improve the visual presentation.'}"
+        prompt += "\n\nCRITICAL: Return the ENTIRE updated <section> element. Ensure all previous brand/theme variables are preserved."
+
+    return prompt
+
 
 def _build_asset_section(filenames: list[str] | None) -> str:
     """Format the list of available local image assets for the prompt."""
@@ -227,12 +235,12 @@ def _build_asset_section(filenames: list[str] | None) -> str:
         return ""
     
     asset_lines = [
-        "=== AVAILABLE LOCAL ASSETS ===",
-        "These images are stored locally in the project's assets/ folder.",
-        "To include one in this slide, use exactly: <img src=\"/assets/filename\">",
-        "Only use an image if it is directly relevant to this slide's content.",
+        "=== MANDATORY LOCAL ASSETS ===",
+        "These specific images have been assigned to THIS slide for grounding.",
+        "You MUST include them in your layout using exactly: <img src=\"/assets/filename\">",
+        "Integrate them elegantly into the design (e.g., as a hero image, in a feature card, or as a floating visual artifact).",
         "",
-        "Available filenames:"
+        "Available filenames to render:"
     ]
     for f in filenames:
         asset_lines.append(f" - {f}")

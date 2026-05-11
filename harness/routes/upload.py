@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from ai.router import get_model
-from store.sessions import get_session, save_session
+from store.sessions import get_session, save_session, get_project_dir
 from services.extractors.text_extractor import extract_text
 from services.extractors.document_extractor import extract_document
 from services.extractors.image_extractor import extract_image
@@ -107,8 +107,9 @@ async def upload_file(
     filename = file.filename or "upload"
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
-    # Save raw file to disk
-    asset_dir = Path(f"sessions/{session_id}/assets")
+    # Save raw file to disk in the project assets folder
+    project_dir = get_project_dir()
+    asset_dir = project_dir / "assets"
     asset_dir.mkdir(parents=True, exist_ok=True)
     asset_path = asset_dir / filename
     asset_path.write_bytes(raw_bytes)
@@ -120,7 +121,8 @@ async def upload_file(
     if ext in DOC_EXTS:
         valid_roles = {"reference", "instruction"}
         effective_role = role if role in valid_roles else "reference"
-        unit = await extract_document(session_id, raw_bytes, filename, role=effective_role)
+        # Pass model so document extractor can produce a semantic summary at upload time
+        unit = await extract_document(session_id, raw_bytes, filename, role=effective_role, model=model)
     elif ext in IMAGE_EXTS:
         # Images are always references now
         unit = await extract_image(session_id, raw_bytes, filename, vision_model)

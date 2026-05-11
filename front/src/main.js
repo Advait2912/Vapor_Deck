@@ -40,6 +40,7 @@ import {
   addOutlineSlide,
   retryAnalysis,
   sendDesignChat,
+  getModels,
 } from './api/client.js';
 
 import { state, updateState } from './state.js';
@@ -74,13 +75,18 @@ let slideJobCounter = 0;
 const latestAuditJobBySlide = {};
 let auditJobCounter = 0;
 
+// ── Context Upload State ──────────────────────────────────────────────────────
+// Files staged here are uploaded after session creation, before synthesize.
+/** @type {{ file: File, name: string, type: 'image'|'doc' }[]} */
+let contextUploadQueue = [];
+
 // ── Info Panel View State ─────────────────────────────────────────────────────
 // Tracks whether the right sidebar shows per-slide detail or the full overview.
 let infoView = 'detail'; // 'detail' | 'overview'
 
 function refreshInfoPanel() {
   const toggle = document.getElementById('info-view-toggle');
-  if (toggle && state.outline.length) toggle.style.display = 'flex';
+  if (toggle && state.outline && state.outline.length) toggle.style.display = 'flex';
   if (infoView === 'overview') {
     renderOutlineContentSummary(elements.infoList);
   } else {
@@ -382,6 +388,9 @@ async function init() {
   // Wire up comparison overlay buttons using the new comparison module
   _wireComparisonButtons();
 
+  // Wire up the context upload panel
+  setupContextUpload();
+
   await loadProjectInfo();
   updateUI();
   mountGlobalControlsInSidebar();
@@ -395,6 +404,67 @@ async function init() {
     elements.visionIndicator.addEventListener('click', () => {
       _runVisionAuditInBackground(state.currentIndex, state.currentIndex + 1, state.currentSlideHtml);
     });
+  }
+
+  // Handle Magic Fix event from UI
+  window.addEventListener('magic-fix', (e) => {
+    applyMagicFixInBackground(e.detail.prompt);
+  });
+
+  window.addEventListener('magic-fix-keep', (e) => {
+    const { index, slideId, newHtml } = e.detail;
+    const slide = state.slides.find(s => s.id === slideId);
+    if (slide) {
+      delete slide.pendingMagicFix;
+      updateUI();
+      _runVisionAuditInBackground(index, index + 1, newHtml);
+    }
+  });
+
+  window.addEventListener('magic-fix-revert', (e) => {
+    const { index, slideId, previousHtml } = e.detail;
+    const slide = state.slides.find(s => s.id === slideId);
+    
+    state.draftSlides[slideId] = previousHtml;
+    state.latestSlides[slideId] = previousHtml;
+    if (state.currentIndex === index) {
+      state.currentSlideHtml = previousHtml;
+      mountSlide(elements.slideIframe, previousHtml, state.theme, state.designConfig?.font_hints);
+    }
+    if (slide) {
+      slide.html = previousHtml;
+      if (slide.refinements?.length && slide.refinements[slide.refinements.length - 1].startsWith('Magic Fix:')) {
+        slide.refinements.pop();
+      }
+      delete slide.pendingMagicFix;
+    }
+    updateUI();
+    persistSessionViewState();
+    _runVisionAuditInBackground(index, index + 1, previousHtml);
+  });
+
+
+  // Fetch available models and update UI
+  try {
+    const modelData = await getModels();
+    if (typeof renderModels === 'function') {
+      renderModels(modelData);
+    } else {
+      // Inline fallback if renderModels couldn't be added to ui.js
+      if (elements.modelSelect) {
+        elements.modelSelect.innerHTML = '';
+        (modelData.text_models || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id; opt.textContent = m.label;
+          elements.modelSelect.appendChild(opt);
+        });
+      }
+      if (!state.model && modelData.text_models?.length) state.model = modelData.text_models[0].id;
+      if (!state.visionModel && modelData.vision_models?.length) state.visionModel = modelData.vision_models[0].id;
+      if (elements.modelSelect) elements.modelSelect.value = state.model;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch models:', err);
   }
 }
 
@@ -452,7 +522,7 @@ async function _streamRefinementIntoComparisonRight() {
       state.currentIndex + 1,
       'refine',
       {
-        refineMode: 'expand',
+        refineMode: 'general',
         currentHtml,
         instruction: elements.refineInstructionInput?.value?.trim() || '',
       },
@@ -575,6 +645,12 @@ async function handleNewDeck() {
   clearSessionViewState(oldSessionId);
   stopAllGeneration();
   pendingRefineImages = [];
+
+  // Reset context upload panel for the new session
+  contextUploadQueue = [];
+  const _pills = document.getElementById('context-file-pills');
+  if (_pills) _pills.innerHTML = '';
+  document.getElementById('context-upload-panel')?.classList.remove('hidden');
   updateState({
     sessionId: null, outline: [], slides: [], messages: [],
     draftSlides: {}, latestSlides: {}, promptApplyingSlides: {},
@@ -592,7 +668,106 @@ async function handleNewDeck() {
   }
 }
 
-// ── Outline Generation ──────────────────────────────────────────────────────────
+// ── Context Upload Panel ───────────────────────────────────────────────────────
+/**
+ * Sets up click-to-pick and drag-and-drop on #context-drop-zone.
+ * Files are queued in contextUploadQueue and shown as pills immediately.
+ * Actual upload happens inside startGeneration once we have a session ID.
+ */
+function setupContextUpload() {
+  const dropZone = document.getElementById('context-drop-zone');
+  const fileInput = document.getElementById('context-file-input');
+  const pillsContainer = document.getElementById('context-file-pills');
+  if (!dropZone || !fileInput || !pillsContainer) return;
+
+  const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']);
+  const DOC_EXTS   = new Set(['pdf', 'docx', 'doc']);
+
+  function getFileType(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (IMAGE_EXTS.has(ext)) return 'image';
+    if (DOC_EXTS.has(ext))   return 'doc';
+    return null;
+  }
+
+  function addPill(entry) {
+    const pill = document.createElement('div');
+    pill.className = `context-file-pill pill-${entry.type}`;
+    pill.dataset.name = entry.name;
+    const icon = entry.type === 'image' ? '🖼' : '📄';
+    pill.innerHTML = `
+      <span class="pill-icon">${icon}</span>
+      <span class="pill-name" title="${entry.name}">${entry.name}</span>
+      <button class="pill-remove" title="Remove">×</button>
+    `;
+    pill.querySelector('.pill-remove').addEventListener('click', () => {
+      contextUploadQueue = contextUploadQueue.filter(e => e !== entry);
+      pill.remove();
+    });
+    pillsContainer.appendChild(pill);
+  }
+
+  function enqueueFiles(files) {
+    for (const file of files) {
+      const type = getFileType(file);
+      if (!type) continue;
+      // Dedup by name
+      if (contextUploadQueue.some(e => e.name === file.name)) continue;
+      const entry = { file, name: file.name, type };
+      contextUploadQueue.push(entry);
+      addPill(entry);
+    }
+  }
+
+  // Click to open file picker
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    enqueueFiles(Array.from(e.target.files || []));
+    fileInput.value = ''; // reset so same file can be re-added after removal
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    enqueueFiles(Array.from(e.dataTransfer.files || []));
+  });
+}
+
+/**
+ * Upload all queued context files to an existing session.
+ * Updates pill styles in-place (uploading → success/error).
+ * Non-fatal: one file failing does not block the rest.
+ */
+async function flushContextUploads(sessionId) {
+  if (!contextUploadQueue.length) return;
+  const pillsContainer = document.getElementById('context-file-pills');
+
+  for (const entry of contextUploadQueue) {
+    const pill = pillsContainer?.querySelector(`[data-name="${CSS.escape(entry.name)}"]`);
+    if (pill) pill.classList.add('pill-uploading');
+
+    try {
+      const role = entry.type === 'doc' ? 'reference' : 'reference';
+      await uploadFile(sessionId, entry.file, role);
+      if (pill) {
+        pill.classList.remove('pill-uploading');
+        // brief success flash
+        pill.style.borderColor = 'rgba(16,185,129,0.6)';
+      }
+    } catch (err) {
+      console.warn(`Context upload failed for '${entry.name}':`, err);
+      if (pill) {
+        pill.classList.remove('pill-uploading');
+        pill.classList.add('pill-error');
+        pill.title = `Upload failed: ${err.message}`;
+      }
+    }
+  }
+}
+
 async function startGeneration(prompt) {
   try {
     state.status = 'INITIALIZING';
@@ -608,10 +783,21 @@ async function startGeneration(prompt) {
     state.sessionId = session.session_id;
 
     state.status = 'SYNTHESIZING';
-    elements.generateBtn.textContent = 'Uploading...';
     updateUI();
+
+    // ── Upload queued context files (images + docs) BEFORE topic text ─────────
+    // Order matters: context must reach the backend before synthesize() so the
+    // multimodal outline prompt has doc_summary and image metadata available.
+    if (contextUploadQueue.length) {
+      elements.generateBtn.textContent = `Uploading ${contextUploadQueue.length} file(s)...`;
+      await flushContextUploads(state.sessionId);
+      // Collapse the panel — files are now committed to the session
+      document.getElementById('context-upload-panel')?.classList.add('hidden');
+    }
+
+    elements.generateBtn.textContent = 'Uploading topic...';
     await uploadText(state.sessionId, prompt, 'topic');
-    
+
     elements.generateBtn.textContent = 'Synthesizing...';
     await synthesize(state.sessionId);
 
@@ -634,6 +820,12 @@ async function startGeneration(prompt) {
     updateUI();
     elements.generateBtn.disabled = false;
     elements.promptInput.disabled = false;
+    
+    const errMsg = error.message || 'Unknown error';
+    const friendlyMsg = `⚠️ **Deck initialization failed.**\n\nIt looks like the AI backend couldn't process your request. This is often because the Ollama server is offline or busy.\n\n**Error Details:** ${errMsg}\n\n*Please ensure Ollama is running and try clicking 'Retry Generation' below.*`;
+    
+    state.messages.push({ role: 'ai', text: friendlyMsg });
+    renderChatMessage('ai', friendlyMsg);
   }
 }
 
@@ -727,8 +919,14 @@ async function handlePlanChat(message) {
   } catch (error) {
     if (error?.name === 'AbortError') return;
     console.error('Plan chat failed:', error);
-    state.status = 'REVIEWING_OUTLINE';
+    state.status = 'ERROR';
     updateUI();
+    
+    const errMsg = error.message || 'Unknown error';
+    const friendlyMsg = `⚠️ **Planning update failed.**\n\nI couldn't update the outline. This might be due to a temporary connection issue with the AI server.\n\n**Error Details:** ${errMsg}\n\n*You can try sending your message again.*`;
+
+    state.messages.push({ role: 'ai', text: friendlyMsg });
+    renderChatMessage('ai', friendlyMsg);
   }
 }
 
@@ -825,6 +1023,11 @@ function navigateToSlide(index) {
   mountPlaceholder(elements.slideIframe, `Slide ${index + 1} not built yet. Click ✧ to generate.`);
   renderOutline(navigateToSlide);
   updateUI();
+  
+  // Ensure we scroll to the bottom of the build history when switching slides
+  if (elements.buildChatHistory) {
+    elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
+  }
 }
 
 // ── Slide Generation ─────────────────────────────────────────────────────────────
@@ -971,10 +1174,15 @@ async function _runVisionAuditInBackground(index, slideNum, html) {
     // Render into an isolated offscreen iframe — fully decoupled from the live preview.
     let snapshotB64 = null;
     try {
-      snapshotB64 = await captureHtmlOffscreen(html, state.theme);
+      // Add a strict 15-second timeout to the capture process to prevent silent hangs
+      snapshotB64 = await Promise.race([
+        captureHtmlOffscreen(html, state.theme),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('HTML capture timed out')), 15000))
+      ]);
     } catch (captureErr) {
       console.warn('Offscreen capture failed, proceeding without screenshot:', captureErr);
     }
+
 
     const result = await takeSnapshot(state.sessionId, id, html, snapshotB64, id);
 
@@ -1379,10 +1587,21 @@ function regenerateCurrentSlide() {
 }
 
 async function customRegenerateWithPrompt() {
-  const instruction = elements.refineInstructionInput?.value?.trim();
   const id = getSlideId(state.currentIndex);
+  const slideData = state.slides.find(s => s.id === id);
+  
+  let instruction = elements.refineInstructionInput?.value?.trim();
+  let mode = 'general'; // Default mode for custom regeneration
+
+  // If instruction is empty, check if there's a vision audit recommendation
+  if (!instruction && slideData?.audit?.refine_prompt) {
+    instruction = `Magic Fix: ${slideData.audit.refine_prompt}`;
+    mode = 'visual_fix';
+  }
+
+  if (!instruction) return;
   const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
-  if (!currentHtml?.trim() || !instruction) return;
+  if (!currentHtml?.trim()) return;
 
   if (activeSlideControllers.has(state.currentIndex)) {
     activeSlideControllers.get(state.currentIndex).abort();
@@ -1398,23 +1617,29 @@ async function customRegenerateWithPrompt() {
   elements.refineInstructionInput.value = '';
   elements.refineInstructionInput.style.height = 'auto';
 
-  state.slides = state.slides.filter(s => id ? s.id !== id : s.index !== index);
   state.status = 'GENERATING';
   if (id) {
     state.generatingSlides[id] = true;
     state.promptApplyingSlides[id] = true;
+    
+    // Add to refinements history for conversational continuity
+    if (!state.slides.find(s => s.id === id).refinements) {
+      state.slides.find(s => s.id === id).refinements = [];
+    }
+    state.slides.find(s => s.id === id).refinements.push(instruction);
   }
+  
   refreshOutline();
   updateUI();
   persistSessionViewState();
-  mountPlaceholder(elements.slideIframe, `Applying prompt to Slide ${slideNum}...`);
+  mountPlaceholder(elements.slideIframe, `Applying refinement to Slide ${slideNum}...`);
   if (index === state.currentIndex) showLoadingBar();
 
   let regenerated = '';
   activeRefineController = new AbortController();
   try {
     const stream = streamSlide(state.sessionId, id, 'refine', {
-      refineMode: 'expand',
+      refineMode: mode,
       currentHtml,
       instruction,
     }, activeRefineController.signal);
@@ -1431,6 +1656,10 @@ async function customRegenerateWithPrompt() {
       state.draftSlides[id] = regenerated;
       state.latestSlides[id] = regenerated;
       delete state.promptApplyingSlides[id];
+      
+      // Update the approved slide html too
+      const s = state.slides.find(s => s.id === id);
+      if (s) s.html = regenerated;
     }
     if (state.currentIndex === index) {
       hideLoadingBar();
@@ -1448,7 +1677,7 @@ async function customRegenerateWithPrompt() {
       state.status = 'ERROR';
       if (id) delete state.promptApplyingSlides[id];
       if (state.currentIndex === index) {
-        mountPlaceholder(elements.slideIframe, `Custom regenerate failed: ${error.message}`);
+        mountPlaceholder(elements.slideIframe, `Refinement failed: ${error.message}`);
       }
     } else {
       if (id) delete state.promptApplyingSlides[id];
@@ -1463,6 +1692,109 @@ async function customRegenerateWithPrompt() {
     persistSessionViewState();
   }
 }
+
+async function applyMagicFixInBackground(instruction) {
+  const id = getSlideId(state.currentIndex);
+  const slideData = state.slides.find(s => s.id === id);
+  if (!slideData) return;
+
+  const currentHtml = id ? (state.draftSlides[id] || state.currentSlideHtml) : state.currentSlideHtml;
+  if (!currentHtml?.trim()) return;
+
+  if (activeSlideControllers.has(state.currentIndex)) {
+    activeSlideControllers.get(state.currentIndex).abort();
+  }
+  if (activeRefineController) activeRefineController.abort();
+
+  const index = state.currentIndex;
+  const slideNum = index + 1;
+  const runToken = sessionRunToken;
+  const jobId = beginSlideJob(index);
+
+  state.status = 'GENERATING';
+  state.generatingSlides[id] = true;
+  state.promptApplyingSlides[id] = true;
+  if (slideData) slideData.magicFixing = true;
+
+  refreshOutline();
+  updateUI();
+  persistSessionViewState();
+  mountPlaceholder(elements.slideIframe, `Applying Magic Fix...`);
+  if (index === state.currentIndex) showLoadingBar();
+
+  let regenerated = '';
+  activeRefineController = new AbortController();
+  try {
+    const stream = streamSlide(state.sessionId, id, 'refine', {
+      refineMode: 'visual_fix',
+      currentHtml,
+      instruction,
+    }, activeRefineController.signal);
+
+    for await (const token of stream) {
+      regenerated += token;
+    }
+
+    if (runToken !== sessionRunToken || !isLatestSlideJob(index, jobId)) return;
+    if (!regenerated.trim()) throw new Error('Empty regenerated slide');
+
+    // Success! Save the backup
+    const previousHtml = currentHtml;
+
+    state.draftSlides[id] = regenerated;
+    state.latestSlides[id] = regenerated;
+    delete state.promptApplyingSlides[id];
+    
+    if (slideData) slideData.html = regenerated;
+
+    // Record the fix in refinements
+    if (!slideData.refinements) slideData.refinements = [];
+    slideData.refinements.push(`Magic Fix: ${instruction}`);
+
+    if (slideData) {
+      slideData.magicFixing = false;
+      slideData.pendingMagicFix = { previousHtml, newHtml: regenerated };
+    }
+
+    if (state.currentIndex === index) {
+      hideLoadingBar();
+      state.currentSlideHtml = regenerated;
+      state.status = 'REVIEWING';
+      mountSlide(elements.slideIframe, regenerated, state.theme, state.designConfig?.font_hints);
+    }
+    
+    updateUI();
+    
+  } catch (error) {
+    if (!isLatestSlideJob(index, jobId)) return;
+    if (error?.name !== 'AbortError') {
+      console.error('Magic fix failed:', error);
+      state.status = 'ERROR';
+      if (id) delete state.promptApplyingSlides[id];
+      if (state.currentIndex === index) {
+        mountPlaceholder(elements.slideIframe, `Magic fix failed: ${error.message}`);
+      }
+      if (elements.buildChatHistory) {
+        const msg = document.createElement('div');
+        msg.className = 'chat-message ai-msg';
+        msg.innerHTML = `❌ Magic Fix failed: ${error.message}`;
+        elements.buildChatHistory.appendChild(msg);
+        elements.buildChatHistory.scrollTop = elements.buildChatHistory.scrollHeight;
+      }
+    } else {
+      if (id) delete state.promptApplyingSlides[id];
+    }
+  } finally {
+    if (!isLatestSlideJob(index, jobId)) return;
+    activeRefineController = null;
+    if (id) delete state.generatingSlides[id];
+    if (slideData) slideData.magicFixing = false;
+    syncStatusFromState();
+    updateUI();
+    persistSessionViewState();
+  }
+}
+
 
 function stopAllGeneration() {
   sessionRunToken += 1;

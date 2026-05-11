@@ -28,6 +28,7 @@ class VisionAuditResult(BaseModel):
     has_empty_regions: bool = False
     has_contrast_issues: bool = False
     has_wrapping_issues: bool = False
+    has_lopsided_layout: bool = False
 
     # Source metadata
     slide_index: int | None = None

@@ -5,27 +5,45 @@
 
 const BASE_URL = 'http://localhost:8000/api';
 
+async function ensureOk(response, context) {
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`${context || 'API Error'} (${response.status}): ${errText}`);
+  }
+  return response;
+}
+
 export async function createSession(data) {
   const response = await fetch(`${BASE_URL}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
+  await ensureOk(response, 'Failed to create session');
   return response.json();
 }
 
 export async function getProjectInfo() {
   const response = await fetch(`${BASE_URL}/project`);
+  await ensureOk(response, 'Failed to get project info');
   return response.json();
 }
 
 export async function getActiveSession() {
   const response = await fetch(`${BASE_URL}/session/active`);
+  await ensureOk(response, 'Failed to get active session');
+  return response.json();
+}
+
+export async function getModels() {
+  const response = await fetch(`${BASE_URL}/models`);
+  await ensureOk(response, 'Failed to get model list');
   return response.json();
 }
 
 export async function deleteSession(sessionId) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}`, { method: 'DELETE' });
+  await ensureOk(response, 'Failed to delete session');
   return response.json();
 }
 
@@ -35,6 +53,7 @@ export async function uploadText(sessionId, text, role = 'topic') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, role })
   });
+  await ensureOk(response, 'Failed to upload text');
   return response.json();
 }
 
@@ -46,17 +65,20 @@ export async function uploadFile(sessionId, file, role = 'reference') {
     method: 'POST',
     body: form
   });
+  await ensureOk(response, 'Failed to upload file');
   return response.json();
 }
 
 export async function synthesize(sessionId) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}/synthesize`, { method: 'POST' });
+  await ensureOk(response, 'Failed to synthesize context');
   return response.json();
 }
 
 export async function generateOutline(sessionId, preferredSlides = 8) {
   const url = `${BASE_URL}/session/${sessionId}/outline?preferred_slides=${preferredSlides}`;
   const response = await fetch(url, { method: 'POST' });
+  await ensureOk(response, 'Failed to generate outline');
   return response.json();
 }
 
@@ -66,10 +88,7 @@ export async function confirmOutline(sessionId, outline) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outline })
   });
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to confirm outline: ${errText}`);
-  }
+  await ensureOk(response, 'Failed to confirm outline');
   return response.json();
 }
 
@@ -80,6 +99,7 @@ export async function updateMode(sessionId, mode, signal) {
     body: JSON.stringify({ mode }),
     signal
   });
+  await ensureOk(response, 'Failed to update mode');
   return response.json();
 }
 
@@ -90,6 +110,7 @@ export async function sendPlanChat(sessionId, message, currentSlideIndex, signal
     body: JSON.stringify({ message, current_slide_index: currentSlideIndex }),
     signal
   });
+  await ensureOk(response, 'Plan chat failed');
   return response.json();
 }
 
@@ -100,6 +121,7 @@ export async function sendDesignChat(sessionId, message, signal) {
     body: JSON.stringify({ message }),
     signal
   });
+  await ensureOk(response, 'Design chat failed');
   return response.json();
 }
 
@@ -134,10 +156,7 @@ export async function* streamSlide(sessionId, slideId, mode = 'generate', extra 
     signal
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Backend ${response.status}: ${errText}`);
-  }
+  await ensureOk(response, isRefine ? 'Refinement failed' : 'Generation failed');
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -183,6 +202,7 @@ export async function approveSlide(sessionId, slideId, html) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ html })
   });
+  await ensureOk(response, 'Failed to approve slide');
   return response.json();
 }
 
@@ -192,7 +212,8 @@ export async function approveSlide(sessionId, slideId, html) {
  */
 export async function takeSnapshot(sessionId, slideId, html, snapshotB64 = null, id = null) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  // Large vision models (like qwen3-vl:235b) can take up to 5 minutes.
+  const timeoutId = setTimeout(() => controller.abort(), 360_000);
 
   try {
     const response = await fetch(`${BASE_URL}/session/${sessionId}/slide/${slideId}/snapshot`, {
@@ -216,7 +237,7 @@ export async function takeSnapshot(sessionId, slideId, html, snapshotB64 = null,
     if (err?.name === 'AbortError') {
       return {
         snapshot_b64: null,
-        audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 120 seconds'] },
+        audit: { verdict: 'audit_failed', timed_out: true, visual_issues: ['Request timed out after 360 seconds'] },
         refine_prompt: null,
         auto_fixed: false,
       };
@@ -233,6 +254,7 @@ export async function updateSlideTitle(sessionId, slideId, title) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title })
   });
+  await ensureOk(response, 'Failed to update slide title');
   return response.json();
 }
 
@@ -245,6 +267,7 @@ export async function updateDeckSettings(sessionId, settings) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings)
   });
+  await ensureOk(response, 'Failed to update deck settings');
   return response.json();
 }
 
@@ -259,6 +282,7 @@ export async function reorderOutline(sessionId, order) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ order })
   });
+  await ensureOk(response, 'Failed to reorder outline');
   return response.json();
 }
 
@@ -271,6 +295,7 @@ export async function addOutlineSlide(sessionId, slide) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(slide)
   });
+  await ensureOk(response, 'Failed to add slide to outline');
   return response.json();
 }
 
@@ -281,11 +306,14 @@ export async function removeOutlineSlide(sessionId, slideN) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}/outline/${slideN}`, {
     method: 'DELETE'
   });
+  await ensureOk(response, 'Failed to remove slide from outline');
   return response.json();
 }
+
 export async function retryAnalysis(sessionId, unitId) {
   const response = await fetch(`${BASE_URL}/session/${sessionId}/input/${unitId}/retry_analysis`, {
     method: 'POST'
   });
+  await ensureOk(response, 'Failed to retry analysis');
   return response.json();
 }

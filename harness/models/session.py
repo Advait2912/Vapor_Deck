@@ -1,6 +1,10 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
 import uuid
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from .input_unit import InputUnit
 
@@ -12,6 +16,7 @@ class OutlineItem(BaseModel):
     intent: str  # title-hero | explain-concept | explain-mechanism | show-example | compare | list-points | code-walkthrough | summary
     key_points: list[str]
     layout_hint: str  # single-column | two-column | code-left | hero-centered | bullet-list
+    assigned_images: list[str] = []  # filenames assigned by LLM during multimodal outline generation
 
 
 class SlideData(BaseModel):
@@ -37,8 +42,8 @@ class DeckSession(BaseModel):
     mode: str = "plan"  # plan | build
 
     # Model config
-    text_model: str = "ollama/gemma4:31b-cloud"
-    vision_model: str = "ollama/ministral-3:14b-cloud"
+    text_model: str = os.getenv("VAPOR_TEXT_MODEL", "ollama/qwen3-coder-next:cloud")
+    vision_model: str = os.getenv("VAPOR_VISION_MODEL", "ollama/qwen3-vl:235b-cloud")
     theme: str = "dark-tech"
 
     # ── Input layer ────────────────────────────────────────────────────────────

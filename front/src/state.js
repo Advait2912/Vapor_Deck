@@ -21,8 +21,8 @@ export const state = {
   mode: 'plan', // plan | build  — global UI toggle
   messages: [],
   theme: 'dark-tech',
-  model: 'ollama/gemma4:31b-cloud',
-  visionModel: 'ollama/ministral-3:14b-cloud',
+  model: null,
+  visionModel: null,
   projectPath: '',
   uploadedAssets: [],
   designConfig: {}, // { font_hints, color_palette, atmospheric_feel, etc. }

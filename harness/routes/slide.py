@@ -95,6 +95,9 @@ async def session_chat(session_id: str, req: ChatRequest):
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Allow chat in any mode to enable fluid additions/refinements
+    previous_status = session.status
+    session.status = "outlining"
+    save_session(session)
 
     model = get_model(session.text_model)
     
@@ -193,6 +196,7 @@ async def session_chat(session_id: str, req: ChatRequest):
             elif slide.title in title_to_new_index:
                 slide.index = title_to_new_index[slide.title]
         
+        session.status = "reviewing_outline"
         save_session(session)
         return {
             "status": "ok", 
@@ -202,6 +206,8 @@ async def session_chat(session_id: str, req: ChatRequest):
         }
         
     except Exception as e:
+        session.status = previous_status
+        save_session(session)
         import traceback
         logger.error(f"[{session_id}] chat failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -261,7 +267,20 @@ async def generate_slide(session_id: str, slide_id: str, force: bool = False):
 
         # Get available local assets
         asset_dir = get_project_dir() / "assets"
-        asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+        all_asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
+        # Use assigned_images from outline if available (multimodal path);
+        # fall back to all assets for text-only sessions or pre-multimodal outlines.
+        if slide_spec.assigned_images:
+            # Filter to only files that actually exist on disk
+            assigned_set = set(slide_spec.assigned_images)
+            asset_filenames = [f for f in all_asset_filenames if f in assigned_set]
+            logger.info(
+                f"[{session_id}] slide {n}: using {len(asset_filenames)} assigned image(s) "
+                f"from outline: {asset_filenames}"
+            )
+        else:
+            asset_filenames = all_asset_filenames
 
         prompt = build_slide_prompt(
             n=n,
@@ -417,7 +436,7 @@ async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    valid_modes = {"simplify", "expand", "example", "interactive"}
+    valid_modes = {"general", "visual_fix"}
     if req.mode not in valid_modes:
         raise HTTPException(status_code=400, detail=f"mode must be one of: {valid_modes}")
 
@@ -440,27 +459,58 @@ async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
         )
         session.slides.append(slide_data)
         
-    if req.instruction and req.instruction.strip():
-        slide_data.refinements.append(req.instruction.strip())
+    # Capture user instruction if provided
+    instruction = req.instruction
+    if instruction and instruction.strip():
+        slide_data.refinements.append(instruction.strip())
         save_session(session)
+    
+    # Auto-ingest Vision Audit feedback if in visual_fix mode or if no instruction is provided
+    audit_feedback = ""
+    if slide_data.audit:
+        audit_verdict = slide_data.audit.get("verdict")
+        if audit_verdict in ("fixable", "regenerate"):
+            audit_feedback = slide_data.audit.get("refine_prompt", "")
+            if (req.mode == "visual_fix" or not instruction) and audit_feedback:
+                logger.info(f"[{session_id}] Ingesting vision audit feedback for refinement: {audit_feedback}")
+                if not instruction:
+                    instruction = f"Fix visual issues: {audit_feedback}"
 
     MODE_INSTRUCTIONS = {
-        "simplify": "Make this slide SIMPLER. Fewer words, fewer elements. Keep only the most essential point.",
-        "expand": "Expand this slide. Add more detail, more explanation, or a deeper example.",
-        "example": "Add a concrete real-world example to this slide. Make it the centerpiece.",
-        "interactive": "Make this slide interactive. Add tabs, toggles, or hover reveals using vanilla JS.",
+        "general": "Refine the slide content and design while maintaining visual consistency.",
+        "visual_fix": f"Focus ONLY on fixing the layout and visual presentation. {audit_feedback}",
     }
 
     model = get_model(session.text_model)
+    
+    # Build conversational history for refinement
+    history_context = ""
+    if slide_data.refinements:
+        history_context = "\nPrevious refinements applied to this slide:\n" + \
+                          "\n".join([f"- {r}" for r in slide_data.refinements])
+
     relevant = get_relevant_chunks(
         session,
-        slide_intent=f"{slide_spec.title} {' '.join(slide_spec.key_points)} {req.instruction or ''}",
+        slide_intent=f"{slide_spec.title} {' '.join(slide_spec.key_points)} {instruction or ''}",
         max_tokens=1500,
     )
 
     # Get available local assets
     asset_dir = get_project_dir() / "assets"
-    asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+    all_asset_filenames = [f.name for f in asset_dir.iterdir() if f.is_file()] if asset_dir.exists() else []
+
+    # Use assigned_images from outline if available (multimodal path);
+    # fall back to all assets for text-only sessions or pre-multimodal outlines.
+    if slide_spec.assigned_images:
+        assigned_set = set(slide_spec.assigned_images)
+        asset_filenames = [f for f in all_asset_filenames if f in assigned_set]
+    else:
+        asset_filenames = all_asset_filenames
+
+    # Construct the refinement-specific prompt
+    refine_instruction = f"{MODE_INSTRUCTIONS.get(req.mode, '')}\n\nUSER INSTRUCTION: {instruction or 'Refine the layout and content.'}"
+    if history_context:
+        refine_instruction += f"\n\n{history_context}"
 
     prompt = build_slide_prompt(
         n=n,
@@ -475,22 +525,9 @@ async def refine_slide(session_id: str, slide_id: str, req: RefineSlideRequest):
         relevant_chunks=relevant,
         asset_filenames=asset_filenames,
         is_refinement=True,
+        current_html=req.current_html,
+        refine_instruction=refine_instruction
     )
-
-    if req.current_html:
-        prompt += f"\n\n=== CURRENT SLIDE HTML ===\n{req.current_html}\n"
-
-    if slide_data.refinements:
-        prompt += "\n=== PREVIOUS USER REFINEMENTS (DO NOT REVERT THESE) ===\n"
-        for i, ref in enumerate(slide_data.refinements[:-1] if req.instruction else slide_data.refinements, 1):
-            prompt += f"{i}. {ref}\n"
-
-    prompt += f"\n=== REFINEMENT INSTRUCTION ===\n{MODE_INSTRUCTIONS.get(req.mode, 'Refine the slide.')}"
-
-    if req.instruction and req.instruction.strip():
-        prompt += f"\nAdditional user instruction: {req.instruction.strip()}"
-
-    prompt += "\n\nCRITICAL: Your task is to modify the provided CURRENT SLIDE HTML. You MUST preserve the existing structural design, layout, background elements (like grids and glows), and ALL Previous User Refinements listed above, unless the current instruction explicitly asks you to change them. Return ONLY the modified HTML block."
 
     logger.info(f"[{session_id}] refining slide {n} mode={req.mode}")
 
